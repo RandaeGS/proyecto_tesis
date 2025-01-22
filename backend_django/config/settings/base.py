@@ -101,6 +101,8 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     "backend_django.users",
+    "center",
+    "uploads",
     # Your stuff: custom apps go here
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
@@ -160,6 +162,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
 ]
+
+MIDDLEWARE += ("crum.CurrentRequestUserMiddleware",)
+
 
 # STATIC
 # ------------------------------------------------------------------------------
