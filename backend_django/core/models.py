@@ -1,7 +1,7 @@
 from django.db import models
 from django_extensions.db.fields import ShortUUIDField
 
-from config import settings
+from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 from crum import get_current_user
 # Create your models here.
