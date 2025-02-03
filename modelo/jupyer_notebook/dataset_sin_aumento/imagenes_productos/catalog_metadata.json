@@ -1,0 +1,34 @@
+{
+  "37_Planeta Azul.jpg": {
+    "category": "agua",
+    "brand": "planeta azul"
+  },
+  "127_Carnation Evaporated Milk.jpg": {
+    "category": "leche",
+    "brand": "carnation"
+  },
+  "197_leche.jpg": {
+    "category": "leche",
+    "brand": "rica"
+  },
+  "7_Oreo Original.jpg": {
+    "category": "galletas",
+    "brand": "oreo"
+  },
+  "4_Club Social Integral Tradicion.jpg": {
+    "category": "galletas",
+    "brand": "club social"
+  },
+  "27_Avena quaker proteina.jpg": {
+    "category": "cereal",
+    "brand": "quaker"
+  },
+  "22_Malta Morena.jpg": {
+    "category": "bebida",
+    "brand": "malta morena"
+  },
+  "198_Almond milk.jpg": {
+    "category": "bebida_vegetal",
+    "brand": "silk"
+  }
+}

@@ -1,0 +1,512 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+<title>TOTOLINK</title>
+<style>
+td,li {font-size:12px;color:#000000;}
+
+.div_body {width:100%;height:100%;background-color:#ffffff;}
+.div_main {width:100%-12px;border-left:1px solid #cccccc;border-right:1px solid #cccccc;margin:0px 6px 0px 6px;}
+.div_bottom {width:100%;height:40px;background-color:#000000;}
+.float_l{float:left;line-height:auto;}
+
+.pw-strength {clear: both;position: relative;top: 14px;left: 95px; width: 180px;height:auto;}
+.pw-bar{background: url(icons/pwd-1.png) no-repeat;height: 14px;overflow: hidden;width: 179px;}
+.pw-bar-on{background:  url(icons/pwd-2.png) no-repeat; width:0px; height:14px;position: absolute;top: 1px;left: 2px;transition: width .5s ease-in;-moz-transition: width .5s ease-in;-webkit-transition: width .5s ease-in;-o-transition: width .5s ease-in;}
+.pw-weak .pw-defule{ width:0px;}
+.pw-weak .pw-bar-on {width: 60px;}
+.pw-medium .pw-bar-on {width: 120px;}
+.pw-strong .pw-bar-on {width: 179px;}
+</style>
+<SCRIPT language=Javascript src="js/language_en.js"></SCRIPT>
+<meta http-equiv="Pragma" content="no-cache">
+<meta HTTP-equiv="Cache-Control" content="no-cache">
+<meta HTTP-EQUIV="Expires" CONTENT="Mon, 01 Jan 1990 00:00:01 GMT">
+
+<link rel="stylesheet" href="style.css" type="text/css">
+<script type="text/javascript" src="util_gw.js"> </script>
+<script src='js/jquery.min.js'></script>
+<script>
+var checkcodeEnb=1;
+var domain_name='itotolink.net';
+var show_num = [];
+var rJsonU,rJsonW;
+var lang_org;
+var isDefZh_ScAndTc=0;
+if(top!=self)top.location.href = self.location.href;
+
+function clean_err(){
+$("#div_err").hide();
+$('#div_bar').show();
+}
+
+$(function(){
+var lan_ip = "192.168.0.1";
+var weblang=0;
+if( 0 == 0 ) 
+{
+	var url=location.href;
+	if( location.href.split("/")[2] != lan_ip  && (-1==(url.indexOf(domain_name))) ) {
+	location.href='http://'+lan_ip+'/login.htm';
+	return false;
+}
+}
+
+$("input[name='userAgent']").val(window.navigator.userAgent);
+$("input[name='setpass']").attr("placeholder", lgps5);
+$("input[name='confirmpass']").attr("placeholder", lgps5);
+
+$(".div_main ").css({"height":document.body.clientHeight-96-40-2});
+$("#div_set").css({"top":(document.body.clientHeight-96-40-2-365)/2-71/2});
+$("#div_login").css({"top":(document.body.clientHeight-96-40-2-361)/2-71/2});
+
+
+if (weblang == 0)
+lang_org="en";
+else if (weblang == 1)
+{
+	if(isDefZh_ScAndTc==1)
+		lang_org="zh_tc";
+	else
+		lang_org="zh";
+
+}
+else if (weblang == 2)
+lang_org="ru";
+else if (weblang == 3)
+lang_org="vi";
+else if (weblang == 5)
+lang_org="zh";
+else
+lang_org="en";
+
+if ('lang-auto-ON' == "lang-auto-ON") {
+var lang = navigator.language||navigator.userLanguage; 
+var langstr=lang.substr(0, 5);
+if(((-1!=langstr.indexOf("zh-TW"))  || (-1!=langstr.indexOf("zh-HK"))) && (isDefZh_ScAndTc==1))
+lang="zh_tc";
+else
+lang = lang.substr(0, 2);
+
+var postVar={"topicurl":"setting/setLangConfig"};
+postVar['navigatorLang']=lang;
+
+if((lang=="zh")|| (lang=="zh_tc") || (lang=="en") || (lang=="vi") || (lang=="ru"))
+{	if(lang!=lang_org)
+	{
+		document.getElementById('div_body').style.display="none";	
+	}
+}
+else
+{	
+	if(lang_org!="en")
+		document.getElementById('div_body').style.display="none";
+	
+}
+
+postVar=JSON.stringify(postVar);//{"navigatorLang":"zh"}
+$.ajax({
+type : "post", url : "/boafrm/formLogin", data : postVar, async : false, dataType : "script"
+});
+}
+
+var postVar={"topicurl":"getting/IsOrgUserPass"};
+postVar=JSON.stringify(postVar);
+$.ajax({
+type : "post", url : "/boafrm/formLogin", data : postVar, async : false,
+success : function(Data){
+var rJson=JSON.parse(Data);
+rJsonU=rJson['isorgadmin'];
+rJsonW=rJson['isorgpass'];
+if(rJson['isorgpass']=="yes"){
+$("#div_login").hide();
+$('#div_set').show();
+$("input[name='setpass']").focus();
+}
+else{
+$("#div_set").hide();
+$('#div_login').show();
+if(rJson['isorgadmin']=="yes"){
+$("input[name='username']").val("admin");
+$("input[name='userpass']").focus();
+}
+else{
+$("input[name='username']").focus();
+}
+}
+}
+});
+
+
+$('#cs_set_btn').on('click', function(event) {
+if($("#setpass").val()=="" || $("#confirmpass").val()==""){
+$('#err_msg').html(lgerr1);
+$('#div_bar').hide();
+$('#div_err').show();
+return false;
+}
+
+var str = $("#setpass").val();
+
+if(str.length<6 || str.length>15){
+$('#err_msg').html(lgerr2);
+$('#div_bar').hide();
+$('#div_err').show();
+return false;
+}
+
+if (str != $("#confirmpass").val()) {
+$('#err_msg').html(lgerr4);
+$('#div_bar').hide();
+$('#div_err').show();
+return false;
+}
+
+for (var i=0; i<str.length; i++) {
+if ( (str.charAt(i) >= 'A' && str.charAt(i) <= 'Z')||
+(str.charAt(i) >= 'a' && str.charAt(i) <= 'z')||
+(str.charAt(i) >= '0' && str.charAt(i) <= '9') )
+continue;
+$("#setpass").focus();
+$('#err_msg').html(lgerr3);
+$('#div_bar').hide();
+$('#div_err').show();
+return false;
+}
+
+$(":input").attr('disabled',true);	
+var postVar={"topicurl":"setting/setAdminPass"};
+postVar['setpass']=$("input[name='setpass']").val();
+postVar=JSON.stringify(postVar);
+$.ajax({
+type : "post", url : "/boafrm/formLogin", data : postVar, async : false,
+success : function(Data){
+window.eval(Data);
+}
+});
+});
+
+
+$('#cs_login_btn').on('click', function(event) {
+if($("input[name='username']").val()==''){
+$('#myDiv').html(lgerr5);
+$('#myDiv').show();
+return false;
+}
+if($("input[name='userpass']").val()==''){
+$('#myDiv').html(lgerr7);
+$('#myDiv').show();
+return false;
+}
+if(checkcodeEnb){
+var val = $(".input-val").val();
+if(val==''){
+$('#myDiv').html(lgerr9);
+$('#myDiv').show();
+return false;
+}
+}
+var postVar={"topicurl":"setting/setUserLogin"};
+postVar['username']=$("input[name='username']").val();
+postVar['userpass']=$("input[name='userpass']").val();
+postVar['checkcode']=$("input[name='checkcode']").val();
+postVar['userAgent']=$("input[name='userAgent']").val();
+postVar['submit-url']=$("input[name='submit-url']").val();
+postVar=JSON.stringify(postVar);
+
+$.ajax({
+type : "post", url : "/boafrm/formLogin", data : postVar, async : false,
+success : function(Data){
+if(Data.length == 0)
+{
+		parent.location="wizardset.htm";//home.htm
+}
+else{
+$("#myDiv").html("");
+window.eval(Data);
+$("#myDiv").show();
+return false;
+}
+}
+});
+});
+
+$('#setpass').keyup(function () { 
+var strongRegex = new RegExp("^(?=.{8,})(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*\\W).*$", "g"); 
+var mediumRegex = new RegExp("^(?=.{7,})(((?=.*[A-Z])(?=.*[a-z]))|((?=.*[A-Z])(?=.*[0-9]))|((?=.*[a-z])(?=.*[0-9]))).*$", "g"); 
+var enoughRegex = new RegExp("(?=.{6,}).*", "g"); 
+
+if (false == enoughRegex.test($(this).val())) { 
+$('#level').removeClass('pw-weak'); 
+$('#level').removeClass('pw-medium'); 
+$('#level').removeClass('pw-strong'); 
+$('#level').addClass(' pw-defule');
+} 
+else if (strongRegex.test($(this).val())) { 
+$('#level').removeClass('pw-weak'); 
+$('#level').removeClass('pw-medium'); 
+$('#level').removeClass('pw-strong'); 
+$('#level').addClass(' pw-strong');
+} 
+else if (mediumRegex.test($(this).val())) { 
+$('#level').removeClass('pw-weak'); 
+$('#level').removeClass('pw-medium'); 
+$('#level').removeClass('pw-strong'); 
+$('#level').addClass(' pw-medium'); 
+} 
+else { 
+$('#level').removeClass('pw-weak'); 
+$('#level').removeClass('pw-medium'); 
+$('#level').removeClass('pw-strong'); 
+$('#level').addClass('pw-weak'); 
+} 
+return true; 
+}); 
+
+if(checkcodeEnb==0)
+	click_skip();
+});//$(function(){--end--
+
+
+$(document).keyup(function(event){
+if(event.keyCode ==13){
+$("#cs_set_btn").trigger("click");
+}
+});
+
+
+$(document).keypress(function(enter) {  
+	if(enter.which == 13) {
+		$("#cs_login_btn").click();
+	}
+});
+
+
+function click_Forget()
+{		
+alert(Js_msg137);
+}
+
+
+function click_skip()
+{
+$("#div_set").hide();
+$("#div_login").show();
+if(rJsonU == "yes"){
+$("input[name='username']").val("admin");
+$("input[name='userpass']").focus();
+}
+else{
+$("input[name='username']").focus();
+}
+}
+
+</script>
+</head>
+
+<body>
+<div class="div_body" id="div_body" align="center">
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td style="background:url(icons/top-left.gif) no-repeat; width:300px; height:96px">&nbsp;</td>
+<td style="background:url(icons/top-center.gif) repeat">&nbsp;</td>
+<td style="background:url(icons/top-right.gif) no-repeat; width:300px; height:96px" align="right">&nbsp;</td>
+</tr>
+</table>
+<div class="div_main" id="div_main">
+<form action=/boafrm/formLogin method=POST>
+<input type="hidden" value="/login.htm" name="submit-url">
+<input type="hidden" value="" name="userAgent">
+
+<div id="div_set" style="position:relative;width:430px;display:none;" align="left">
+<ul>
+<li style="font-size:24px;font-weight:bold;line-height:40px;"><script>dw(lgps1)</script></li>
+<li style="font-size:18px;font-weight:bold;color:#999999;float:right;line-height:30px;cursor:pointer;" onClick='click_skip();'><script>dw(lgps2)</script></li>
+<li style="height:1px;clear:both;"></li>
+</ul>
+
+<div style="width:100%;height:328px;background-color:#fbfbfb;border:1px solid #bebebe;">
+
+
+<div style="position:relative;top:30px;left:30px;">
+<ul>
+<ol style="width:370px;height:40px;border:1px solid #e1e4e6;padding: 0px 0px 0px 0px;">
+<li style="float:left;height:40px;"><img src="icons/user.png" style="width:40px;height:40px;"></li>
+<li style="float:left;line-height:40px;" class="login_label"><script>dw(lgps3)</script></li>
+<li style="float:left;"><input type="password" id="setpass" name="setpass" maxlength="15" class="login_input" onFocus="clean_err()"></li>
+</ol>
+<li style="height:30px;clear:both;"></li>
+<ol style="width:370px;height:40px;border:1px solid #e1e4e6;padding: 0px 0px 0px 0px;">
+<li style="float:left;height:40px;"><img src="icons/key.png" style="width:40px;height:40px;"></li>
+<li style="float:left;line-height:40px;" class="login_label"><script>dw(lgps4)</script></li>
+<li style="float:left;"><input type="password" id="confirmpass" name="confirmpass" maxlength="15" class="login_input" onFocus="clean_err()"></li>
+</ol>
+<li id="div_bar" style="display:">
+<table>
+<tr>    
+<td id="level" class="pw-strength">             
+<div class="pw-bar" align="center"></div>
+<div class="pw-bar-on"></div>
+</td>   
+</tr>
+</table>
+</li>
+<li id="div_err" style="width:370px;line-height:43px;clear:both;text-align:center;color: #ff0000;"><span id="err_msg"></span></li>
+</ul>
+</div>
+<div style="position:absolute;top:296px;width:430px;height:103px;background-color:f9fafa;border-top:1px solid #e1e4e6;">
+<ul>
+<li><button type="button" class="btn btn-block btn-cs-blue" style="position:absolute;top:30px;left:155px;width:120px;height:40px;background-color:#0095c5;" id="cs_set_btn"><script>dw(lgps6)</script></button></li>
+</ul>
+</div>
+</div>
+<ul>
+<li style="height:10px;clear:both;"></li>
+<li style="color:#999999;"><script>dw(lgps7)</script></li>
+</ul>
+</div><!-- /end .div_set -->
+<div id="div_login" style="position:relative;width:430px;display:none;" align="left">
+<ul>
+<li style="font-size:24px;font-weight:bold;line-height:40px;"><script>dw(Js_UserLog)</script></li>
+<li style="font-size:18px;font-weight:bold;color:#999999;float:right;line-height:30px;cursor:pointer;" onClick='click_Forget();'><script>dw(Js_ForgetPasswd)</script></li>
+<li style="height:1px;clear:both;"></li>
+</ul>
+<div id="div_pannel" style="width:100%;height:328px;background-color:#fbfbfb;border:1px solid #bebebe;">
+
+<div style="position:relative;top:30px;left:30px;">
+<ul>
+<ol style="width:370px;height:40px;border:1px solid #e1e4e6;border-bottom: 0px;padding: 0px 0px 0px 0px;">
+<li style="float:left;height:40px;"><img src="icons/user.png" style="width:40px;height:40px;"></li>
+<li style="float:left;line-height:40px;" class="login_label"><script>dw(MM_UserName)</script></li>
+<li style="float:left;"><input type="text" id="username" name="username" maxlength="15" class="login_input" onFocus='$("#myDiv").hide();'></li>
+</ol>
+<ol style="width:370px;height:40px;border:1px solid #e1e4e6;border-bottom: 0px;padding: 0px 0px 0px 0px;">
+<li style="float:left;height:40px;"><img src="icons/key.png" style="width:40px;height:40px;"></li>
+<li style="float:left;line-height:40px;" class="login_label"><script>dw(MM_PassWord)</script></li>
+<li style="float:left;"><input type="password" id="userpass" name="userpass" maxlength="15" class="login_input" onFocus='$("#myDiv").hide();'></li>
+</ol>
+<ol  id="check_code" style="width:370px;height:40px;border:1px solid #e1e4e6;padding: 0px 0px 0px 0px;">
+<li id="li_vcode" style="float:left;height:40px;"><img src="icons/Vcode.png" style="width:40px;height:40px;"></li>
+<li id="li_label" style="float:left;line-height:40px;" class="login_label"><script>dw(Verification_Code)</script></li>
+<li id="li_input" style="float:left;"><input type="text" name="checkcode"  maxlength="4" class="input-val login_input" ></li>
+</ol>
+<ol id="check_pic" style="width:370px;height:50px;border:1px solid #e1e4e6;padding: 0px 0px 0px 0px;">
+<li style="float:left;height:50px;width:50px;"><canvas id="canvas" width="50" height="70" style="margin:5px 0px 6px 90px;"></canvas></li>
+<li style="float:right;height:50px;width:55px;position:relative;"><img id="refresh_img" src="icons/u578.png" style="cursor:pointer;margin:13px;6px;6px;0px;"></li>
+<li style="line-height:20px;clear:both;text-align:center;color:#ff0000;"><span id="myDiv"></span></li>
+</ol>
+
+
+</ul>
+</div>
+<div id="div_button" style="position:absolute;top:296;width:430px;height:103px;background-color:f9fafa;border-top:1px solid #e1e4e6;">
+<ul>
+<li><button type="button" class="btn btn-block btn-cs-blue" style="position:absolute;top:30px;left:155px;width:120px;height:40px;background-color:#0095c5;" id="cs_login_btn"><script>dw(lgps9)</script></button></li>
+</ul>
+</div>
+</div>
+</div><!-- /end .div_login -->
+<script type="text/javascript">
+$(function(){
+if(checkcodeEnb){
+$("#check_code").css({"border":"1px solid #e1e4e6","border-bottom":"0px"});
+$("#li_vcode,#li_label,#li_input,#check_pic").show();
+draw(show_num);
+
+$("input[name='userpass']").focusin('click',function(){
+draw(show_num);
+})
+}
+else{
+$("#checkcode").hide();
+$("#div_pannel").css({"height":248});
+$("#div_button").css({"top":216});
+$("#li_vcode,#li_label,#li_input,#check_pic").hide();
+$("#check_code").css({"height":"30px","border":"","border-top":"1px solid #e1e4e6"});
+}
+})
+
+function draw(show_num) {
+$('#canvas').width("100");
+$('#canvas').height("40");
+var canvas_width=$('#canvas').width();
+var canvas_height=$('#canvas').height();
+var canvas = document.getElementById("canvas");
+var context = canvas.getContext("2d");
+canvas.width = canvas_width;
+canvas.height = canvas_height;
+var postVar={"topicurl":"setting/getSanvas"};
+postVar=JSON.stringify(postVar);
+$.ajax({
+type : "post", url : "/boafrm/formLogin", data : postVar, async : false,
+success : function(Data){
+aCode=Data;
+}
+});
+
+for (var i = 0; i <= 3; i++) {
+var deg = Math.random() * 30 * Math.PI / 180;//产生0~30之间的随机弧度
+var txt = aCode[i];
+show_num[i] = txt.toLowerCase();
+var x = 10 + i * 20;
+var y = 20 + Math.random() * 8;
+
+if(y>24)
+{
+ y=24;
+}
+
+context.font = "bold 28px 微软雅黑";
+
+context.translate(x, y);
+context.rotate(deg);
+
+context.fillText(txt, 0, 0);
+context.rotate(-deg);
+context.translate(-x, -y);
+}
+for (var i = 0; i <= 5; i++) {
+context.strokeStyle = randomColor();
+context.beginPath();
+context.moveTo(Math.random() * canvas_width, Math.random() * canvas_height);
+context.lineTo(Math.random() * canvas_width, Math.random() * canvas_height);
+context.stroke();
+}
+for (var i = 0; i <= 30; i++) {
+context.strokeStyle = randomColor();
+context.beginPath();
+var x = Math.random() * canvas_width;
+var y = Math.random() * canvas_height;
+context.moveTo(x, y);
+context.lineTo(x + 1, y + 1);
+context.stroke();
+}
+}
+
+$(function(){
+	$("#refresh_img").click(function(){
+		draw(show_num);
+	});
+});
+
+function randomColor() {
+var r = Math.floor(Math.random() * 256);
+var g = Math.floor(Math.random() * 256);
+var b = Math.floor(Math.random() * 256);
+return "rgb(" + r + "," + g + "," + b + ")";
+}
+</script>
+</form>
+</div><!-- /end .div_main -->
+<table width="100%" border="0" cellspacing="0" cellpadding="0">
+<tr>
+<td style="background:url(icons/bottom-left.gif) no-repeat; height:41; width:15">&nbsp;</td>
+<td style="background:url(icons/bottom-center1.gif) repeat;" align="center">
+<font size="1" color="white" style="font-weight:bold">
+Copyright(C)2019 TOTOLINK Ltd, All Rights Reserved</font></td>
+<td style="background:url(icons/bottom-right.gif) no-repeat; height:41; width:15">&nbsp;</td>
+</tr>
+</table>
+</div><!-- /end .div_body -->
+</body>
+</html>
