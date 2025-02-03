@@ -1,0 +1,34 @@
+
+INSTRUCCIONES PARA ANOTAR IMÁGENES DE GALLETAS
+
+1. Instalar LabelImg:
+   pip install labelImg
+
+2. Iniciar LabelImg:
+   labelImg
+
+3. Pasos para anotar:
+   a. Abrir el directorio de imágenes ('images')
+   b. Configurar el directorio de salida para las anotaciones ('labels')
+   c. Establecer formato de guardado como YOLO
+   d. Para cada imagen:
+      - Presionar 'W' para crear un nuevo bounding box
+      - Dibujar un rectángulo alrededor de cada galleta
+      - Seleccionar la clase 'cookie'
+      - Presionar 'D' para ir a la siguiente imagen
+      - Guardar (Ctrl+S)
+
+4. Consejos:
+   - El bounding box debe incluir la galleta completa
+   - Ser consistente con el tamaño de los boxes
+   - Anotar todas las galletas visibles en la imagen
+   - Si una galleta está parcialmente visible, anotarla si es reconocible
+
+5. Atajos de teclado útiles:
+   - W: Crear bounding box
+   - D: Siguiente imagen
+   - A: Imagen anterior
+   - Ctrl+S: Guardar
+   - Del: Eliminar box seleccionado
+
+Una vez completada la anotación, ejecutar el script de entrenamiento.
