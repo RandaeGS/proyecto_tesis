@@ -11,42 +11,95 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AuthProvider>().initializeAuth();
+    });
+  }
+
+  @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      try {
-        await context.read<AuthProvider>().login(
-          _usernameController.text,
-          _passwordController.text,
-        );
-        // Navegar a la pantalla principal después del login exitoso
-      } catch (e) {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await context.read<AuthProvider>().login(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+
+      if (mounted) {
+        // Navegar a la pantalla principal
+        // Navigator.of(context).pushReplacement(
+        //   MaterialPageRoute(builder: (_) => const HomeScreen()),
+        // );
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error de autenticación: ${e.toString()}'),
+            content: Text(e.toString()),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
-      } finally {
+      }
+    } finally {
+      if (mounted) {
         setState(() => _isLoading = false);
       }
     }
   }
 
+  String? _validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Por favor ingresa tu email';
+    }
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(value)) {
+      return 'Por favor ingresa un email válido';
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Por favor ingresa tu contraseña';
+    }
+    if (value.length < 6) {
+      return 'La contraseña debe tener al menos 6 caracteres';
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!context.watch<AuthProvider>().isInitialized) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -59,7 +112,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Logo o título
                   const Icon(
                     Icons.lock_outline,
                     size: 80,
@@ -76,12 +128,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
-                  // Campo de usuario
+                  // Campo de email
                   TextFormField(
-                    controller: _usernameController,
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
                       labelText: 'Email',
-                      prefixIcon: const Icon(Icons.person_outline),
+                      prefixIcon: const Icon(Icons.email_outlined),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -90,12 +143,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderSide: const BorderSide(color: Colors.grey),
                       ),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Por favor ingresa tu email';
-                      }
-                      return null;
-                    },
+                    validator: _validateEmail,
+                    textInputAction: TextInputAction.next,
+                    enabled: !_isLoading,
                   ),
                   const SizedBox(height: 16),
                   // Campo de contraseña
@@ -111,7 +161,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? Icons.visibility_outlined
                               : Icons.visibility_off_outlined,
                         ),
-                        onPressed: () {
+                        onPressed: _isLoading
+                            ? null
+                            : () {
                           setState(() {
                             _obscurePassword = !_obscurePassword;
                           });
@@ -125,12 +177,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderSide: const BorderSide(color: Colors.grey),
                       ),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Por favor ingresa tu contraseña';
-                      }
-                      return null;
-                    },
+                    validator: _validatePassword,
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _handleLogin(),
+                    enabled: !_isLoading,
                   ),
                   const SizedBox(height: 24),
                   // Botón de inicio de sesión

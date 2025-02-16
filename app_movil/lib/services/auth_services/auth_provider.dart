@@ -1,34 +1,79 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:app_movil/entities/user.dart';
 import 'auth_service.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   bool _isAuthenticated = false;
+  bool _isInitialized = false;
   User? _user;
+  String? _token;
 
   bool get isAuthenticated => _isAuthenticated;
+  bool get isInitialized => _isInitialized;
   User? get user => _user;
+  String? get token => _token;
 
-  Future<void> login(String username, String password) async {
+  Future<void> initializeAuth() async {
+    if (_isInitialized) return;
+
     try {
-      final token = await _authService.login(username, password);
+      _token = await _authService.getToken();
+      if (_token != null) {
+        _user = await _authService.getSavedUser();
+        _isAuthenticated = _user != null;
+      }
+    } catch (e) {
+      _isAuthenticated = false;
+      _user = null;
+      _token = null;
+    } finally {
+      _isInitialized = true;
+      notifyListeners();
+    }
+  }
+
+  Future<void> login(String email, String password) async {
+    try {
+      final authData = await _authService.login(email, password);
+
+      _token = authData['token'];
+      _user = authData['user'] as User;
       _isAuthenticated = true;
-      // Aquí podrías hacer una petición adicional para obtener los datos del usuario
+
       notifyListeners();
     } catch (e) {
       _isAuthenticated = false;
-      throw e;
+      _user = null;
+      _token = null;
+      notifyListeners();
+      throw _handleError(e);
     }
   }
 
   Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('token');
-    _isAuthenticated = false;
-    _user = null;
-    notifyListeners();
+    try {
+      await _authService.clearAuthData();
+      _isAuthenticated = false;
+      _user = null;
+      _token = null;
+      notifyListeners();
+    } catch (e) {
+      throw 'Error al cerrar sesión: $e';
+    }
+  }
+
+  String _handleError(dynamic error) {
+    if (error is String) return error;
+
+    if (error.toString().contains('SocketException')) {
+      return 'Error de conexión: verifica tu internet';
+    }
+
+    if (error.toString().contains('TimeoutException')) {
+      return 'Tiempo de espera agotado: intenta de nuevo';
+    }
+
+    return 'Error de autenticación: ${error.toString()}';
   }
 }
