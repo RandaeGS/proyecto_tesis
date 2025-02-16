@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../entities/user.dart';
+import 'package:app_movil/entities/user.dart';
 import 'auth_service.dart';
 
 class AuthProvider with ChangeNotifier {
