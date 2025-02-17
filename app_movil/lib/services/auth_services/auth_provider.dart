@@ -51,6 +51,38 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  Future<void> register({
+    required String centerName,
+    required String centerAddress,
+    required String email,
+    required String password,
+    required String userName,
+    required bool isSuperuser,
+  }) async {
+    try {
+      final response = await _authService.register(
+        centerName: centerName,
+        centerAddress: centerAddress,
+        email: email,
+        password: password,
+        userName: userName,
+        isSuperuser: isSuperuser,
+      );
+
+      _token = response['token'];
+      _user = User.fromJson(response['user']);
+      _isAuthenticated = true;
+
+      notifyListeners();
+    } catch (e) {
+      _isAuthenticated = false;
+      _user = null;
+      _token = null;
+      notifyListeners();
+      throw _handleError(e);
+    }
+  }
+
   Future<void> logout() async {
     try {
       await _authService.clearAuthData();

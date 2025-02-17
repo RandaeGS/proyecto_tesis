@@ -51,6 +51,51 @@ class AuthService {
     }
   }
 
+  Future<Map<String, dynamic>> register({
+    required String centerName,
+    required String centerAddress,
+    required String email,
+    required String password,
+    required String userName,
+    required bool isSuperuser,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/centers/'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'center': {
+            'name': centerName,
+            'address': centerAddress,
+          },
+          'user': {
+            'email': email,
+            'password': password,
+            'name': userName,
+            'is_superuser': isSuperuser,
+          }
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        final data = json.decode(response.body);
+        await _saveToken(data['token']);
+
+        return data;
+      } else if (response.statusCode == 400) {
+        final errors = json.decode(response.body);
+        throw 'Error de validación: ${errors.toString()}';
+      } else {
+        throw 'Error en el registro: ${response.statusCode}';
+      }
+    } catch (e) {
+      if (e is http.ClientException) {
+        throw 'Error de conexión: verifica tu internet';
+      }
+      rethrow;
+    }
+  }
+
   Future<void> _saveUserInfo(User user) async {
     final prefs = await SharedPreferences.getInstance();
     final userMap = {

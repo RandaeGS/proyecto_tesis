@@ -2,32 +2,37 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_services/auth_provider.dart';
 import 'screens/auth_screens/login_screen.dart';
+import 'screens/auth_screens/register_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AuthProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider<AuthProvider>(
-          create: (_) => AuthProvider(),
-        ),
-      ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Mi Aplicación',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          scaffoldBackgroundColor: Colors.white,
-          useMaterial3: true,
-        ),
-        home: const LoginScreen(),
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Mi Aplicación',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        scaffoldBackgroundColor: Colors.white,
+        useMaterial3: true,
       ),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const LoginScreen(),
+        '/register': (context) => const RegisterScreen(),
+      },
     );
   }
 }

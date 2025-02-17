@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:app_movil/services/auth_services/auth_provider.dart';
+import '../../services/auth_services/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,9 +38,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await context.read<AuthProvider>().login(
-        _emailController.text.trim(),
-        _passwordController.text,
-      );
+            _emailController.text.trim(),
+            _passwordController.text,
+          );
 
       if (mounted) {
         // Navegar a la pantalla principal
@@ -164,10 +164,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: _isLoading
                             ? null
                             : () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -183,6 +183,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     enabled: !_isLoading,
                   ),
                   const SizedBox(height: 24),
+                  // Enlace para registrarse
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/register');
+                    },
+                    child: const Text(
+                      '¿No tienes cuenta? Regístrate aquí',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   // Botón de inicio de sesión
                   ElevatedButton(
                     onPressed: _isLoading ? null : _handleLogin,
@@ -195,21 +209,21 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     child: _isLoading
                         ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor:
-                        AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
                         : const Text(
-                      'Iniciar Sesión',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white,
-                      ),
-                    ),
+                            'Iniciar Sesión',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ],
               ),
