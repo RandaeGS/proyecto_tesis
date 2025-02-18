@@ -1,0 +1,2 @@
+/home/friasluna/Tesis_Proyect/proyecto_tesis/app_movil/android/app/.cxx/Debug/642h5l59/armeabi-v7a/CMakeFiles/edit_cache.dir
+/home/friasluna/Tesis_Proyect/proyecto_tesis/app_movil/android/app/.cxx/Debug/642h5l59/armeabi-v7a/CMakeFiles/rebuild_cache.dir
