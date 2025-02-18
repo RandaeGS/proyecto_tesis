@@ -1,13 +1,20 @@
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 
-from backend_django.users.models import User
+User = get_user_model()
 
-
-class UserSerializer(serializers.ModelSerializer[User]):
+class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["name", "url"]
-
+        fields = ('id', 'email', 'name', 'password', 'is_superuser', 'is_staff')
         extra_kwargs = {
-            "url": {"view_name": "api:user-detail", "lookup_field": "pk"},
+            'password': {'write_only': True},
+            'id': {'read_only': True}
         }
+
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        user = User(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user

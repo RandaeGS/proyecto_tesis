@@ -22,6 +22,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _password2Controller = TextEditingController();
   final _userNameController = TextEditingController();
   final bool _isSuperuser = true; // Siempre será true
+  final bool _isStaff = true; // Siempre será true
   bool _obscurePassword1 = true;
   bool _obscurePassword2 = true;
   bool _isLoading = false;
@@ -61,6 +62,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             password: _password1Controller.text,
             userName: _userNameController.text,
             isSuperuser: _isSuperuser,
+            isStaff: _isStaff,
           );
 
       if (mounted) {

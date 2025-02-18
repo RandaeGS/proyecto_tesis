@@ -22,6 +22,7 @@ urlpatterns = [
     # User management
     path("users/", include("backend_django.users.urls", namespace="users")),
     path("accounts/", include("allauth.urls")),
+    path('api/', include('center.urls')),
     # Your stuff: custom urls includes go here
     # ...
     # Media files

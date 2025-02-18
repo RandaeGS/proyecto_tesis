@@ -37,8 +37,9 @@ class AuthProvider with ChangeNotifier {
     try {
       final authData = await _authService.login(email, password);
 
-      _token = authData['token'];
-      _user = authData['user'] as User;
+      _token = authData['token'] as String;
+      final userData = authData['user'] as Map<String, dynamic>;
+      _user = User.fromJson(userData);
       _isAuthenticated = true;
 
       notifyListeners();
@@ -58,6 +59,7 @@ class AuthProvider with ChangeNotifier {
     required String password,
     required String userName,
     required bool isSuperuser,
+    required bool isStaff,
   }) async {
     try {
       final response = await _authService.register(
@@ -67,14 +69,17 @@ class AuthProvider with ChangeNotifier {
         password: password,
         userName: userName,
         isSuperuser: isSuperuser,
+        isStaff: isStaff,
       );
 
-      _token = response['token'];
-      _user = User.fromJson(response['user']);
+      _token = response['token'] as String;
+      final userData = response['user'] as Map<String, dynamic>;
+      _user = User.fromJson(userData);
       _isAuthenticated = true;
 
       notifyListeners();
     } catch (e) {
+      print('Error en registro: $e');
       _isAuthenticated = false;
       _user = null;
       _token = null;
