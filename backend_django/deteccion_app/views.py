@@ -2,7 +2,6 @@ import time
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.conf import settings
 
 from .models import Deteccion
 from .api.serializers import DeteccionSerializer, ImagenUploadSerializer
@@ -37,6 +36,11 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
         tipo_modelo = serializer.validated_data['tipo_modelo']
         guardar_imagen = serializer.validated_data['guardar_imagen']
 
+        # Campos opcionales para el modelo Image
+        center_id = serializer.validated_data.get('center_id', None)
+        lighting_condition = serializer.validated_data.get('lighting_condition', '')
+        metadata = serializer.validated_data.get('metadata', {})
+
         # Cargar imagen con PIL
         try:
             imagen_pil = Image.open(imagen_file)
@@ -59,8 +63,6 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Resto del código...
-
         # Procesar la imagen
         try:
             start_time = time.time()
@@ -68,26 +70,97 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
             resultados = modelo_service.process_image(imagen_pil)
             tiempo_procesamiento = time.time() - start_time
 
-            # Crear registro en la base de datos
+            # Crear registro en la base de datos Deteccion
             deteccion = Deteccion(
                 tipo_modelo=tipo_modelo,
                 tiempo_procesamiento=tiempo_procesamiento
             )
 
-            # Guardar la imagen si se solicita
+            # Guardar la imagen en Deteccion si se solicita
             if guardar_imagen:
                 deteccion.imagen = imagen_file
 
-            # Guardar los resultados
+            # Guardar los resultados en Deteccion
             deteccion.set_resultados(resultados)
             deteccion.save()
 
-            # Devolver los resultados
-            return Response({
+            # Variable para almacenar la referencia a la imagen guardada en el segundo modelo
+            imagen_guardada = None
+
+            # Guardar también en el modelo Image si se solicita
+            if guardar_imagen:
+                try:
+                    # Importar explícitamente el modelo Image desde center.models
+                    from uploads.models import Image as ImageModel
+                    from center.models import Center
+                    from django.utils import timezone
+
+                    logger.info("Intentando guardar en modelo Image")
+
+                    # Verificar si hay centros disponibles
+                    center_instance = None
+                    center_count = Center.objects.count()
+                    logger.info(f"Número de centros disponibles: {center_count}")
+
+                    if center_id:
+                        try:
+                            center_instance = Center.objects.get(id=center_id)
+                            logger.info(f"Centro encontrado con ID: {center_id}")
+                        except Center.DoesNotExist:
+                            logger.warning(f"Centro con ID {center_id} no encontrado")
+
+                    # Si no hay centro específico, buscar uno existente o crear uno nuevo
+                    if not center_instance:
+                        center_instance = Center.objects.first()
+
+                        # Si no hay centros, crear uno por defecto
+                        if not center_instance:
+                            logger.info("Creando nuevo centro por defecto")
+                            center_instance = Center.objects.create(
+                                name="Centro de Acopio Automático",
+                                address="Dirección por defecto"
+                            )
+                            logger.info(f"Centro creado automáticamente con ID: {center_instance.id}")
+
+                    # Si no se proporciona metadata, usar los resultados de la detección
+                    if not metadata:
+                        metadata = resultados
+
+                    # Crear instancia del modelo Image
+                    imagen_guardada = ImageModel(
+                        file=imagen_file,
+                        taken_at=timezone.now(),
+                        taken_by=request.user if request.user.is_authenticated else None,
+                        center=center_instance,
+                        processed=True,
+                        lighting_condition=lighting_condition or '',
+                        metadata=metadata
+                    )
+
+                    # Guardar la imagen
+                    imagen_guardada.save()
+                    logger.info(f"Imagen guardada exitosamente en modelo Image con ID: {imagen_guardada.id}")
+
+                except Exception as img_error:
+                    logger.error(f"Error al guardar en el modelo Image: {str(img_error)}", exc_info=True)
+                    # Continuar con el proceso aunque falle el guardado en Image
+
+            # Construir la respuesta
+            response_data = {
                 'deteccion_id': deteccion.id,
                 'tiempo_procesamiento': tiempo_procesamiento,
                 'resultados': resultados
-            })
+            }
+
+            # Añadir información de la imagen guardada en Image si existe
+            if imagen_guardada:
+                response_data['imagen_guardada'] = {
+                    'id': imagen_guardada.id,
+                    'url': request.build_absolute_uri(imagen_guardada.file.url) if hasattr(imagen_guardada.file,
+                                                                                           'url') else None
+                }
+
+            return Response(response_data)
 
         except Exception as e:
             logger.error(f"Error al procesar la imagen: {str(e)}", exc_info=True)
@@ -95,7 +168,6 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
                 {'error': f'Error al procesar la imagen: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
     @action(detail=False, methods=['get'], url_path='info-modelo')
     def info_modelo(self, request):
         """

@@ -31,3 +31,8 @@ class ImagenUploadSerializer(serializers.Serializer):
         ]
     )
     guardar_imagen = serializers.BooleanField(default=False)
+
+    # Campos opcionales del modelo Image
+    center_id = serializers.IntegerField(required=False)
+    lighting_condition = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    metadata = serializers.JSONField(required=False, default=dict)
