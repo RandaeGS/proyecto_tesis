@@ -76,9 +76,9 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
                 tiempo_procesamiento=tiempo_procesamiento
             )
 
-            # Guardar la imagen en Deteccion si se solicita
-            if guardar_imagen:
-                deteccion.imagen = imagen_file
+            # # Guardar la imagen en Deteccion si se solicita
+            # if guardar_imagen:
+            #     deteccion.imagen = imagen_file
 
             # Guardar los resultados en Deteccion
             deteccion.set_resultados(resultados)
