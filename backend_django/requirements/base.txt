@@ -28,3 +28,6 @@ django-crum==0.7.9 #https://django-crum.readthedocs.io/en/latest/
 # Django-shortuuidfield
 django-shortuuidfield==0.1.3  # https://pypi.org/project/django-shortuuidfield/
 djangorestframework-simplejwt==5.4.0
+numpy==2.2.3
+torch==2.6.0
+ultralytics

@@ -23,11 +23,12 @@ urlpatterns = [
     path("users/", include("backend_django.users.urls", namespace="users")),
     path("accounts/", include("allauth.urls")),
     path('api/', include('center.urls')),
+    path('', include('deteccion_app.urls')),
     # Your stuff: custom urls includes go here
-    # ...
-    # Media files
-    *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
 ]
+
+# Media files - Corregida esta parte
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # API URLS
 urlpatterns += [
@@ -64,6 +65,11 @@ if settings.DEBUG:
         ),
         path("500/", default_views.server_error),
     ]
+
+    # Agrega las URLs estáticas y de medios correctamente
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
     if "debug_toolbar" in settings.INSTALLED_APPS:
         import debug_toolbar
 

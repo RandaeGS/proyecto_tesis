@@ -1,6 +1,6 @@
 # ruff: noqa: ERA001, E501
 """Base settings to build other settings files upon."""
-
+import os
 import ssl
 from pathlib import Path
 
@@ -104,7 +104,8 @@ THIRD_PARTY_APPS = [
     "rest_framework.authtoken",
     "corsheaders",
     "drf_spectacular",
-    "rest_framework_simplejwt"
+    "rest_framework_simplejwt",
+    "deteccion_app"
 ]
 
 LOCAL_APPS = [
@@ -113,6 +114,37 @@ LOCAL_APPS = [
     "uploads",
     # Your stuff: custom apps go here
 ]
+
+# Configuraciones para los modelos
+MODEL_SETTINGS = {
+    'YOLO_MODEL_PATH': os.path.join(BASE_DIR, 'weights', 'modelo.pt'),
+}
+
+# Configuraciones para la API de Claude (reemplaza con tus credenciales)
+CE_API_KEY = os.environ.get('CE_API_KEY', '')
+CE_API_URL = 'https://api.anthropic.com/v1/messages'
+
+# Configuración de Roboflow API
+ROBOFLOW_API_KEY = os.environ.get('rf_pWyR7PvkW0YL2djEdCerpYyeSdS2', '')
+ROBOFLOW_MODEL_ID = os.environ.get('ROBOFLOW_MODEL_ID', '')
+ROBOFLOW_MODEL_VERSION = os.environ.get('ROBOFLOW_MODEL_VERSION', '')
+
+# Configuraciones de medios para guardar las imágenes
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Configuraciones de REST Framework
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 

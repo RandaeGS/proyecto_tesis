@@ -1,0 +1,16 @@
+modelo/jupyer_notebook/dataset/train/augmented_images
+modelo/jupyer_notebook/dataset/train/images
+modelo/jupyer_notebook/dataset/entrenamiento/imagenes
+modelo/jupyer_notebook/dataset/imagenes_productos
+modelo/jupyer_notebook/dataset/test/images
+modelo/jupyer_notebook/yolov8x.pt
+modelo/jupyer_notebook/openfoodfacts_dataset/
+modelo/jupyer_notebook/galletas.jpg
+modelo/jupyer_notebook/dataset/
+modelo/jupyer_notebook/balanced_dataset/
+modelo/jupyer_notebook/canned_food_1563.jpg
+modelo/jupyer_notebook/canned_food_1564.jpg
+modelo/jupyer_notebook/canned_food_1623.jpg
+modelo/jupyer_notebook/cereals_cookies_111.jpg
+modelo/jupyer_notebook/cereals_cookies_114.jpg
+
