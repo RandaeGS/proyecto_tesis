@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'services/auth_services/auth_provider.dart';
 import 'screens/auth_screens/login_screen.dart';
 import 'screens/auth_screens/register_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/user_management/user_list_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,10 +30,32 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
       ),
-      initialRoute: '/',
+      home: Consumer<AuthProvider>(
+        builder: (ctx, auth, _) {
+          // Inicializar auth si aún no se ha hecho
+          if (!auth.isInitialized) {
+            Future.microtask(() => auth.initializeAuth());
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          // Si el usuario está autenticado, mostrar la pantalla principal
+          if (auth.isAuthenticated) {
+            return const HomeScreen();
+          }
+
+          // Si no está autenticado, mostrar la pantalla de inicio de sesión
+          return const LoginScreen();
+        },
+      ),
       routes: {
-        '/': (context) => const LoginScreen(),
+        '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
+        '/home': (context) => const HomeScreen(),
+        '/users': (context) => const UserListScreen(),
       },
     );
   }
