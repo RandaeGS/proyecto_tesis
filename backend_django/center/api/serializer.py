@@ -1,4 +1,4 @@
-from rest_framework import serializers
+from rest_framework import serializers, viewsets
 from django.contrib.auth import get_user_model
 
 from backend_django.users.api.serializers import UserSerializer
@@ -37,3 +37,7 @@ class CenterRegistrationSerializer(serializers.Serializer):
             'user': user,
             'center': center,
         }
+
+class CenterViewSet(viewsets.ModelViewSet):
+    queryset = Center.objects.all()
+    serializer_class = CenterSerializer
