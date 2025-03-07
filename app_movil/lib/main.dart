@@ -1,3 +1,4 @@
+import 'package:app_movil/screens/auth_screens/config_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_services/auth_provider.dart';
@@ -6,9 +7,14 @@ import 'screens/auth_screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/user_management/user_list_screen.dart';
 import 'screens/image_capture_screen.dart';
+import 'services/config.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializar la configuración
+  await AppConfig.initializeConfig();
+  print('API URL configurada: ${AppConfig.getApiUrl()}');
 
   runApp(
     ChangeNotifierProvider(
@@ -58,6 +64,7 @@ class MyApp extends StatelessWidget {
         '/home': (context) => const HomeScreen(),
         '/users': (context) => const UserListScreen(),
         '/images': (context) => const ImageCaptureScreen(),
+        '/config': (context) => const ConfigScreen(),
       },
     );
   }

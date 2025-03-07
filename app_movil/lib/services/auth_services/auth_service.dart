@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_movil/entities/user.dart';
+import 'package:app_movil/services/config.dart';
 
 class AuthService {
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  // Usar la URL desde la configuración en lugar de hardcodear
+  static String get baseUrl => AppConfig.getApiUrl();
   static const String tokenKey = 'auth_token';
   static const String userKey = 'user_data';
 
@@ -87,6 +89,8 @@ class AuthService {
 
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
+      print('Intentando login en: $baseUrl/api/login/');
+
       final response = await http.post(
         Uri.parse('$baseUrl/api/login/'),
         headers: {'Content-Type': 'application/json'},
@@ -96,6 +100,8 @@ class AuthService {
         }),
       );
 
+      print('Respuesta del servidor: ${response.statusCode}');
+      print('Cuerpo de la respuesta: ${response.body}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
@@ -126,6 +132,7 @@ class AuthService {
         throw 'Error del servidor: ${response.statusCode}';
       }
     } catch (e) {
+      print('Error de login: $e');
       if (e is http.ClientException) {
         throw 'Error de conexión: verifica tu internet';
       }
