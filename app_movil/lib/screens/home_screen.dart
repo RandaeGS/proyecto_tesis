@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_services/auth_provider.dart';
+import 'image_capture_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -120,11 +121,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 16),
 
-              // Opciones disponibles
-              if (isAdmin)
-                ..._buildAdminOptions(context)
-              else
-                _buildEmptyState(),
+              // Opciones disponibles para todos los usuarios
+              _buildOptionCard(
+                title: 'Imágenes',
+                description: 'Capturar y visualizar imágenes',
+                icon: Icons.camera_alt,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ImageCaptureScreen(),
+                    ),
+                  );
+                },
+              ),
+
+              // Opciones adicionales para administradores
+              if (isAdmin) ...[
+                const SizedBox(height: 8),
+                ..._buildAdminOptions(context),
+              ],
             ],
           ),
         ),

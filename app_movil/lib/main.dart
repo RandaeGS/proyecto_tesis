@@ -5,6 +5,7 @@ import 'screens/auth_screens/login_screen.dart';
 import 'screens/auth_screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/user_management/user_list_screen.dart';
+import 'screens/image_capture_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,6 +57,7 @@ class MyApp extends StatelessWidget {
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
         '/users': (context) => const UserListScreen(),
+        '/images': (context) => const ImageCaptureScreen(),
       },
     );
   }
