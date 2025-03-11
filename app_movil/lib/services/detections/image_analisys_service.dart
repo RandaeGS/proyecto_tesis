@@ -8,7 +8,6 @@ import 'package:path/path.dart' as path;
 import '../auth_services/auth_service.dart';
 import '../config.dart';
 
-// Modelo de resultados de análisis
 class AnalysisResult {
   final String id;
   final String fechaCreacion;
@@ -16,8 +15,6 @@ class AnalysisResult {
   final int numeroObjetos;
   final double tiempoProcesamiento;
   final String resultados;
-
-  // Propiedades adicionales para la respuesta estructurada
   final List<Map<String, dynamic>> detecciones;
   final String modeloUsado;
 
@@ -31,6 +28,43 @@ class AnalysisResult {
     this.detecciones = const [],
     this.modeloUsado = '',
   });
+
+  // Agregar método para convertir a Map
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'fechaCreacion': fechaCreacion,
+      'tipoModelo': tipoModelo,
+      'numeroObjetos': numeroObjetos,
+      'tiempoProcesamiento': tiempoProcesamiento,
+      'resultados': resultados,
+      'detecciones': detecciones,
+      'modeloUsado': modeloUsado,
+    };
+  }
+
+  // Método factory para construir desde JSON
+  factory AnalysisResult.fromJsonMap(Map<String, dynamic> map) {
+    List<Map<String, dynamic>> detecList = [];
+
+    if (map['detecciones'] != null) {
+      detecList = List<Map<String, dynamic>>.from(
+          (map['detecciones'] as List).map((item) =>
+          Map<String, dynamic>.from(item))
+      );
+    }
+
+    return AnalysisResult(
+      id: map['id'] ?? '',
+      fechaCreacion: map['fechaCreacion'] ?? '',
+      tipoModelo: map['tipoModelo'] ?? '',
+      numeroObjetos: map['numeroObjetos'] ?? 0,
+      tiempoProcesamiento: map['tiempoProcesamiento'] ?? 0.0,
+      resultados: map['resultados'] ?? '',
+      detecciones: detecList,
+      modeloUsado: map['modeloUsado'] ?? '',
+    );
+  }
 
   factory AnalysisResult.fromJson(Map<String, dynamic> json) {
     debugPrint('Procesando AnalysisResult.fromJson con: ${json.keys}');

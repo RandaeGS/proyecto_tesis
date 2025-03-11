@@ -4,7 +4,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
+import '../services/deteccion_services/save_deteccion_service.dart';
 import '../services/detections/image_analisys_service.dart';
+import '../services/detections/product_managment/product_screen_managment.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({Key? key}) : super(key: key);
@@ -16,18 +18,37 @@ class ImageCaptureScreen extends StatefulWidget {
 class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   final ImagePicker _picker = ImagePicker();
   final ImageAnalysisService _analysisService = ImageAnalysisService();
+  final AnalysisStorageService _storageService = AnalysisStorageService();
   List<File> _capturedImages = [];
   bool _isLoading = false;
-  String _selectedModel = "yolo"; // Modelo por defecto
+  String _selectedModel = "yolo";
 
-  // Mapa para almacenar los resultados de análisis por imagen
+  // Mapa para almacenar los resultados
   Map<String, AnalysisResult> _analysisResults = {};
 
   @override
   void initState() {
     super.initState();
     _loadSavedImages();
+    _loadAnalysisResults();
   }
+
+  // Cargar análisis guardados
+  Future<void> _loadAnalysisResults() async {
+    final Map<String, dynamic> storedResults = await _storageService.getAnalysisResults();
+
+    // Convertir resultados guardados al formato correcto
+    final Map<String, AnalysisResult> loadedResults = {};
+
+    storedResults.forEach((key, value) {
+      loadedResults[key] = AnalysisResult.fromJsonMap(value);
+    });
+
+    setState(() {
+      _analysisResults = loadedResults;
+    });
+  }
+
 
   Future<void> _loadSavedImages() async {
     setState(() {
@@ -98,6 +119,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         try {
           final result = await _analysisService.analyzeImage(savedImage, _selectedModel);
 
+          // Guardar el resultado en storage
+          await _storageService.saveAnalysisResult(savedImage.path, result);
+
           setState(() {
             _analysisResults[savedImage.path] = result;
             _isLoading = false;
@@ -135,6 +159,10 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   Future<void> _deleteImage(File image) async {
     try {
       await image.delete();
+
+      // También eliminar del almacenamiento
+      await _storageService.removeAnalysisResult(image.path);
+
       setState(() {
         _capturedImages.remove(image);
         _analysisResults.remove(image.path);
@@ -303,6 +331,23 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         title: const Text('Imágenes y Análisis'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
+        actions: [
+          // Añadir botón de gestión de productos
+          IconButton(
+            icon: const Icon(Icons.inventory),
+            tooltip: 'Gestión de productos',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProductManagementScreen(
+                    analysisResults: _analysisResults,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showImageOptions,
@@ -316,7 +361,6 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           : _buildImageGrid(),
     );
   }
-
   Widget _buildEmptyState() {
     return Center(
       child: Column(

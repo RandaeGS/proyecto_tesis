@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_services/auth_provider.dart';
+import '../services/deteccion_services/save_deteccion_service.dart';
+import '../services/detections/image_analisys_service.dart';
+import '../services/detections/product_managment/product_screen_managment.dart';
 import 'image_capture_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -133,6 +136,33 @@ class _HomeScreenState extends State<HomeScreen> {
                       builder: (context) => const ImageCaptureScreen(),
                     ),
                   );
+                },
+              ),
+
+              _buildOptionCard(
+                title: 'Gestión de Productos',
+                description: 'Visualizar y gestionar productos detectados',
+                icon: Icons.inventory,
+                onTap: () {
+                  // Primero obtenemos los resultados de análisis actuales
+                  final storageService = AnalysisStorageService();
+                  storageService.getAnalysisResults().then((resultsMap) {
+                    // Convertir los resultados al formato esperado
+                    final Map<String, AnalysisResult> analysisResults = {};
+                    resultsMap.forEach((key, value) {
+                      analysisResults[key] = AnalysisResult.fromJsonMap(value);
+                    });
+
+                    // Navegar a la pantalla de gestión
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProductManagementScreen(
+                          analysisResults: analysisResults,
+                        ),
+                      ),
+                    );
+                  });
                 },
               ),
 
