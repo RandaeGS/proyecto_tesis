@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../entities/user.dart';
+import '../../entities/center.dart' as app_center;
+import '../../services/user_provider.dart';
 
 class UserFormScreen extends StatefulWidget {
   final bool isEditing;
   final User? user;
+  final int? centerId;  // Añadir parámetro para el ID del centro
 
   const UserFormScreen({
     Key? key,
     required this.isEditing,
     this.user,
+    this.centerId,  // Parámetro opcional para el ID del centro
   }) : super(key: key);
 
   @override
@@ -17,6 +22,7 @@ class UserFormScreen extends StatefulWidget {
 
 class _UserFormScreenState extends State<UserFormScreen> {
   final _formKey = GlobalKey<FormState>();
+  late final UserProvider _userProvider;
 
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -32,6 +38,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
   @override
   void initState() {
     super.initState();
+    _userProvider = Provider.of<UserProvider>(context, listen: false);
 
     if (widget.isEditing && widget.user != null) {
       _nameController.text = widget.user!.name;
@@ -53,6 +60,17 @@ class _UserFormScreenState extends State<UserFormScreen> {
   Future<void> _saveUser() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Verificar que tenemos un ID de centro
+    if (widget.centerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error: No se puede identificar el centro'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     // Verificar que las contraseñas coincidan en caso de nuevo usuario
     if (!widget.isEditing &&
         _passwordController.text != _confirmPasswordController.text) {
@@ -68,24 +86,53 @@ class _UserFormScreenState extends State<UserFormScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Simulamos la operación
-      await Future.delayed(const Duration(seconds: 1));
+      bool success;
 
-      // Aquí irían las llamadas reales a la API
+      if (widget.isEditing && widget.user != null) {
+        // Actualizar usuario existente
+        success = await _userProvider.updateUser(
+          centerId: widget.centerId!,
+          userId: widget.user!.email,
+          name: _nameController.text.trim(),
+          isSuperuser: _isSuperuser,
+          isStaff: _isStaff,
+        );
+      } else {
+        // Crear nuevo usuario
+        success = await _userProvider.createUser(
+          centerId: widget.centerId!,
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          name: _nameController.text.trim(),
+          isSuperuser: _isSuperuser,
+          isStaff: _isStaff,
+        );
+      }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.isEditing
-                  ? 'Usuario actualizado correctamente'
-                  : 'Usuario creado correctamente',
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.isEditing
+                    ? 'Usuario actualizado correctamente'
+                    : 'Usuario creado correctamente',
+              ),
+              backgroundColor: Colors.green,
             ),
-            backgroundColor: Colors.green,
-          ),
-        );
+          );
 
-        Navigator.pop(context, true); // Regresamos true para indicar éxito
+          Navigator.pop(context, true); // Regresamos true para indicar éxito
+        } else {
+          setState(() => _isLoading = false);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${_userProvider.errorMessage}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -117,6 +164,60 @@ class _UserFormScreenState extends State<UserFormScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Información del centro
+                if (_userProvider.currentCenter != null) ...[
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Centro',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              Text(
+                                'ID: ${_userProvider.currentCenter!.id}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _userProvider.currentCenter!.name,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _userProvider.currentCenter!.address,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Información del usuario
                 const Text(
                   'Información del Usuario',
@@ -165,7 +266,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
 
                     // Validación básica de email
                     final emailRegex =
-                        RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                    RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
                     if (!emailRegex.hasMatch(value)) {
                       return 'Por favor ingresa un email válido';
                     }
@@ -198,10 +299,10 @@ class _UserFormScreenState extends State<UserFormScreen> {
                         onPressed: _isLoading
                             ? null
                             : () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
                       ),
                     ),
                     validator: (value) {
@@ -238,11 +339,11 @@ class _UserFormScreenState extends State<UserFormScreen> {
                         onPressed: _isLoading
                             ? null
                             : () {
-                                setState(() {
-                                  _obscureConfirmPassword =
-                                      !_obscureConfirmPassword;
-                                });
-                              },
+                          setState(() {
+                            _obscureConfirmPassword =
+                            !_obscureConfirmPassword;
+                          });
+                        },
                       ),
                     ),
                     validator: (value) {
@@ -275,19 +376,19 @@ class _UserFormScreenState extends State<UserFormScreen> {
                 SwitchListTile(
                   title: const Text('Administrador'),
                   subtitle:
-                      const Text('Concede todos los permisos del sistema'),
+                  const Text('Concede permisos de administración del centro'),
                   value: _isSuperuser,
                   onChanged: _isLoading
                       ? null
                       : (value) {
-                          setState(() {
-                            _isSuperuser = value;
-                            // Si es superusuario, automáticamente es staff
-                            if (value) {
-                              _isStaff = true;
-                            }
-                          });
-                        },
+                    setState(() {
+                      _isSuperuser = value;
+                      // Si es superusuario, automáticamente es staff
+                      if (value) {
+                        _isStaff = true;
+                      }
+                    });
+                  },
                   activeColor: Colors.blue,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -309,10 +410,10 @@ class _UserFormScreenState extends State<UserFormScreen> {
                   onChanged: _isLoading || _isSuperuser
                       ? null
                       : (value) {
-                          setState(() {
-                            _isStaff = value;
-                          });
-                        },
+                    setState(() {
+                      _isStaff = value;
+                    });
+                  },
                   activeColor: Colors.blue,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -339,22 +440,22 @@ class _UserFormScreenState extends State<UserFormScreen> {
                   ),
                   child: _isLoading
                       ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                      AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
                       : Text(
-                          widget.isEditing
-                              ? 'Actualizar Usuario'
-                              : 'Crear Usuario',
-                          style: const TextStyle(
-                            fontSize: 16,
-                          ),
-                        ),
+                    widget.isEditing
+                        ? 'Actualizar Usuario'
+                        : 'Crear Usuario',
+                    style: const TextStyle(
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
               ],
             ),

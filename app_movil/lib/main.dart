@@ -2,6 +2,7 @@ import 'package:app_movil/screens/auth_screens/config_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/auth_services/auth_provider.dart';
+import 'services/user_provider.dart'; // Importamos nuestro nuevo provider
 import 'screens/auth_screens/login_screen.dart';
 import 'screens/auth_screens/register_screen.dart';
 import 'screens/home_screen.dart';
@@ -17,8 +18,11 @@ void main() async {
   print('API URL configurada: ${AppConfig.getApiUrl()}');
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => UserProvider()), // Añadimos el UserProvider
+      ],
       child: const MyApp(),
     ),
   );
