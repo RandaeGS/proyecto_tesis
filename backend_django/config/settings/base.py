@@ -105,7 +105,8 @@ THIRD_PARTY_APPS = [
     "corsheaders",
     "drf_spectacular",
     "rest_framework_simplejwt",
-    "deteccion_app"
+    "django_filters",
+    "deteccion_app",
 ]
 
 LOCAL_APPS = [
@@ -135,6 +136,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Configuraciones de REST Framework
 REST_FRAMEWORK = {
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
     'DEFAULT_AUTHENTICATION_CLASSES': [

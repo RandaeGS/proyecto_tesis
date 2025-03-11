@@ -24,6 +24,8 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path('api/', include('center.urls')),
     path('', include('deteccion_app.urls')),
+
+    path('api/', include('uploads.urls')),
     # Your stuff: custom urls includes go here
 ]
 
