@@ -1,255 +1,136 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
-import 'package:path/path.dart' as path;
 
-import '../auth_services/auth_service.dart';
-import '../config.dart';
+import '../../entities/analisysresult.dart';
+import '../core/api_client.dart';
+import '../core/api_constants.dart';
+import '../core/storage_services.dart';
 
-class AnalysisResult {
-  final String id;
-  final String fechaCreacion;
-  final String tipoModelo;
-  final int numeroObjetos;
-  final double tiempoProcesamiento;
-  final String resultados;
-  final List<Map<String, dynamic>> detecciones;
-  final String modeloUsado;
-
-  AnalysisResult({
-    required this.id,
-    required this.fechaCreacion,
-    required this.tipoModelo,
-    required this.numeroObjetos,
-    required this.tiempoProcesamiento,
-    required this.resultados,
-    this.detecciones = const [],
-    this.modeloUsado = '',
-  });
-
-  // Agregar método para convertir a Map
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'fechaCreacion': fechaCreacion,
-      'tipoModelo': tipoModelo,
-      'numeroObjetos': numeroObjetos,
-      'tiempoProcesamiento': tiempoProcesamiento,
-      'resultados': resultados,
-      'detecciones': detecciones,
-      'modeloUsado': modeloUsado,
-    };
-  }
-
-  // Método factory para construir desde JSON
-  factory AnalysisResult.fromJsonMap(Map<String, dynamic> map) {
-    List<Map<String, dynamic>> detecList = [];
-
-    if (map['detecciones'] != null) {
-      detecList = List<Map<String, dynamic>>.from(
-          (map['detecciones'] as List).map((item) =>
-          Map<String, dynamic>.from(item))
-      );
-    }
-
-    return AnalysisResult(
-      id: map['id'] ?? '',
-      fechaCreacion: map['fechaCreacion'] ?? '',
-      tipoModelo: map['tipoModelo'] ?? '',
-      numeroObjetos: map['numeroObjetos'] ?? 0,
-      tiempoProcesamiento: map['tiempoProcesamiento'] ?? 0.0,
-      resultados: map['resultados'] ?? '',
-      detecciones: detecList,
-      modeloUsado: map['modeloUsado'] ?? '',
-    );
-  }
-
-  factory AnalysisResult.fromJson(Map<String, dynamic> json) {
-    debugPrint('Procesando AnalysisResult.fromJson con: ${json.keys}');
-
-    // Intentamos extraer los resultados
-    final resultadosData = json['resultados'] ?? {};
-    List<Map<String, dynamic>> detecciones = [];
-    int objCount = 0;
-    String modelType = '';
-
-    // Procesamos la estructura de resultados
-    if (resultadosData is Map) {
-      // Extraer el tipo de modelo
-      modelType = resultadosData['model_type'] ?? '';
-
-      // Extraer conteo de objetos
-      objCount = resultadosData['count'] ?? 0;
-
-      // Extraer detecciones
-      if (resultadosData.containsKey('detections') && resultadosData['detections'] is List) {
-        final List detectionsList = resultadosData['detections'] as List;
-        detecciones = detectionsList.map((item) =>
-        Map<String, dynamic>.from(item as Map)
-        ).toList();
-
-        // Asegurar que el conteo coincida si no estaba explícito
-        if (objCount == 0) {
-          objCount = detecciones.length;
-        }
-      }
-    }
-
-    // Crear una versión formateada del JSON de resultados para mostrar
-    final formattedJson = _formatResultJson(resultadosData);
-
-    return AnalysisResult(
-      id: json['deteccion_id']?.toString() ?? '',
-      fechaCreacion: DateTime.now().toString(),
-      tipoModelo: json['tipo_modelo'] ?? modelType,
-      numeroObjetos: objCount,
-      tiempoProcesamiento: json['tiempo_procesamiento']?.toDouble() ?? 0.0,
-      resultados: formattedJson,
-      detecciones: detecciones,
-      modeloUsado: modelType,
-    );
-  }
-
-  // Método para formatear el JSON de resultados de manera más legible
-  static String _formatResultJson(Map<String, dynamic> json) {
-    const JsonEncoder encoder = JsonEncoder.withIndent('  ');
-    try {
-      return encoder.convert(json);
-    } catch (e) {
-      return json.toString();
-    }
-  }
-
-  // Método para obtener una descripción resumida de cada detección
-  List<String> getDetectionDescriptions() {
-    return detecciones.map((detection) {
-      final className = detection['class'] ?? 'Desconocido';
-      final confidence = detection['confidence'] ?? 0.0;
-      final formattedConfidence = (confidence * 100).toStringAsFixed(1);
-
-      return '$className (${formattedConfidence}%)';
-    }).toList();
-  }
-}
-
+/// Servicio para analizar imágenes y manejar resultados
 class ImageAnalysisService {
-  static String get baseUrl => AppConfig.getApiUrl();
+  final ApiClient _apiClient = ApiClient();
+  final StorageService _storageService = StorageService();
 
-  // Obtener token de autenticación
-  Future<String> _getAuthToken() async {
-    final authService = AuthService();
-    final token = await authService.getToken();
-    if (token == null || token.isEmpty) {
-      throw 'No se encontró token de autenticación. Por favor inicie sesión nuevamente.';
-    }
-    return token;
-  }
-
-  // Analizar una imagen usando el endpoint
-  Future<AnalysisResult> analyzeImage(File imageFile, String modelType) async {
-    final token = await _getAuthToken();
-    final url = '$baseUrl/api/detecciones/analizar/';
-
-    debugPrint('Analizando imagen con modelo $modelType');
-    debugPrint('URL: $url');
-
+  /// Analiza una imagen usando el endpoint de la API
+  Future<AnalysisResult> analyzeImage(File imageFile, String modelType, {int? centerId}) async {
     try {
-      // Ya que sabemos que el endpoint requiere un archivo, vamos directo a multipart
-      return await _analyzeWithMultipart(imageFile, modelType, token);
+      debugPrint('Analizando imagen con modelo $modelType');
+
+      // Campos adicionales para el análisis
+      final fields = {
+        'tipo_modelo': modelType,
+        'guardar_imagen': 'true',
+      };
+
+      // Añadir centerId si está disponible
+      if (centerId != null) {
+        fields['center_id'] = centerId.toString();
+      }
+
+      // Enviar la imagen para análisis
+      final data = await _apiClient.uploadFile(
+        ApiConstants.analyzeImage,
+        imageFile.path,
+        'imagen',
+        fields,
+        entityName: 'Análisis',
+      );
+
+      // Convertir la respuesta a un objeto AnalysisResult
+      final result = AnalysisResult.fromJson(data);
+
+      // Guardar el resultado en el almacenamiento local
+      await _storageService.saveAnalysisResult(imageFile.path, result);
+
+      return result;
     } catch (e) {
       debugPrint('Error en analyzeImage: $e');
       rethrow;
     }
   }
 
-  // Método para enviar solo JSON (como en el ejemplo de la documentación)
-  Future<AnalysisResult?> _analyzeWithJsonOnly(String imagePath,
-      String modelType, String token) async {
-    final url = '$baseUrl/api/detecciones/analizar/';
-
+  /// Obtiene todos los resultados de análisis guardados
+  Future<Map<String, AnalysisResult>> getAllAnalysisResults() async {
     try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'tipo_modelo': modelType
-        }),
-      );
+      final Map<String, dynamic> resultsMap = await _storageService.getAnalysisResults();
+      final Map<String, AnalysisResult> analysisResults = {};
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-        return AnalysisResult.fromJson(data);
-      } else {
-        debugPrint(
-            'Error en _analyzeWithJsonOnly: ${response.statusCode} - ${response
-                .body}');
-        return null; // Permitir que se intente el otro método
-      }
+      // Convertir cada entrada a un objeto AnalysisResult
+      resultsMap.forEach((key, value) {
+        analysisResults[key] = AnalysisResult.fromJsonMap(value);
+      });
+
+      return analysisResults;
     } catch (e) {
-      debugPrint('Error en _analyzeWithJsonOnly: $e');
-      return null; // Permitir que se intente el otro método
+      debugPrint('Error en getAllAnalysisResults: $e');
+      return {};
     }
   }
 
-  // Método para enviar con multipart
-  Future<AnalysisResult> _analyzeWithMultipart(File imageFile, String modelType, String token) async {
-    final url = '$baseUrl/api/detecciones/analizar/';
+  /// Obtiene un resultado de análisis guardado por la ruta de la imagen
+  Future<AnalysisResult?> getAnalysisResult(String imagePath) async {
+    return await _storageService.getAnalysisResult(imagePath);
+  }
 
-    // Crear solicitud multipart
-    final request = http.MultipartRequest('POST', Uri.parse(url));
+  /// Elimina un resultado de análisis
+  Future<void> removeAnalysisResult(String imagePath) async {
+    await _storageService.removeAnalysisResult(imagePath);
+  }
 
-    // Añadir headers de autenticación
-    request.headers.addAll({
-      'Authorization': 'Bearer $token',
-      'Accept': 'application/json',
+  /// Obtiene resultados de análisis filtrados por un centro específico
+  Future<Map<String, AnalysisResult>> getAnalysisResultsByCenter(int centerId) async {
+    try {
+      final Map<String, AnalysisResult> allResults = await getAllAnalysisResults();
+      final Map<String, AnalysisResult> filteredResults = {};
+
+      // Filtrar solo los resultados del centro especificado
+      allResults.forEach((key, value) {
+        // Incluir si el centerId coincide o si no tiene centerId asignado
+        if (value.centerId == centerId || value.centerId == null) {
+          filteredResults[key] = value;
+        }
+      });
+
+      return filteredResults;
+    } catch (e) {
+      debugPrint('Error en getAnalysisResultsByCenter: $e');
+      return {};
+    }
+  }
+
+  /// Obtiene un mapa de conteo de objetos por tipo desde los resultados
+  Map<String, int> getObjectCountsByType(Map<String, AnalysisResult> results) {
+    final Map<String, int> counts = {};
+
+    results.forEach((path, result) {
+      for (var detection in result.detecciones) {
+        final String className = detection['class'] ?? 'unknown';
+        counts[className] = (counts[className] ?? 0) + 1;
+      }
     });
 
-    // Añadir campos
-    request.fields['tipo_modelo'] = modelType;
-    request.fields['guardar_imagen'] = 'true';
+    return counts;
+  }
 
-    // Añadir la imagen
-    final fileExtension = path.extension(imageFile.path).toLowerCase();
-    String mimeType;
+  /// Obtiene una lista de imágenes agrupadas por tipo de objeto
+  Map<String, List<String>> getImagesByObjectType(Map<String, AnalysisResult> results) {
+    final Map<String, List<String>> imagesByType = {};
 
-    if (fileExtension == '.jpg' || fileExtension == '.jpeg') {
-      mimeType = 'image/jpeg';
-    } else if (fileExtension == '.png') {
-      mimeType = 'image/png';
-    } else {
-      mimeType = 'application/octet-stream';
-    }
+    results.forEach((imagePath, result) {
+      // Obtener conjunto de tipos únicos en esta imagen
+      final Set<String> typesInImage = result.detecciones
+          .map((detection) => detection['class'] as String? ?? 'unknown')
+          .toSet();
 
-    request.files.add(await http.MultipartFile.fromPath(
-        'imagen',
-        imageFile.path,
-        contentType: MediaType.parse(mimeType)
-    ));
+      // Añadir la imagen a cada tipo encontrado
+      for (var type in typesInImage) {
+        if (!imagesByType.containsKey(type)) {
+          imagesByType[type] = [];
+        }
+        imagesByType[type]!.add(imagePath);
+      }
+    });
 
-    // Debug para verificar qué estamos enviando
-    debugPrint('Enviando solicitud a $url');
-    debugPrint('Campos: ${request.fields}');
-
-    // Enviar la solicitud
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
-
-    // Debug para ver la respuesta
-    debugPrint('Código de respuesta: ${response.statusCode}');
-    debugPrint('Respuesta body: ${response.body}');
-
-    // Manejar la respuesta
-    if (response.statusCode == 200) {
-      final Map<String, dynamic> data = jsonDecode(response.body);
-      return AnalysisResult.fromJson(data);
-    } else {
-      throw 'Error al analizar imagen (multipart): ${response.statusCode} - ${response.body}';
-    }
+    return imagesByType;
   }
 }

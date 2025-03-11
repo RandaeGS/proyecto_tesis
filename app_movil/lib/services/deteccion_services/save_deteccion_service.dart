@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../detections/image_analisys_service.dart';
+import '../../entities/analisysresult.dart';
 
 class AnalysisStorageService {
   static const String analysisResultsKey = 'analysis_results';

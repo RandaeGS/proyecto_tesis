@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/auth_services/auth_provider.dart';
-import '../services/deteccion_services/save_deteccion_service.dart';
 import '../services/detections/image_analisys_service.dart';
 import '../services/detections/product_managment/product_screen_managment.dart';
+import '../services/user_provider.dart';
 import 'image_capture_screen.dart';
+import 'user_management/user_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -20,24 +22,43 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
 
-    // Verificar si necesitamos cargar la información del centro
+    // Siempre intentar cargar la información del centro desde el backend al iniciar
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      if (authProvider.isAuthenticated && authProvider.userCenter == null) {
+      if (authProvider.isAuthenticated) {
         _loadCenterInfo();
       }
     });
   }
 
-  // Cargar información del centro
+  // Cargar información del centro desde el backend
   Future<void> _loadCenterInfo() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
+      // Primero intentamos cargar la información desde el provider de autenticación
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       await authProvider.refreshCenterInfo();
+
+      // Si no tenemos un centro, intentamos obtenerlo desde el UserProvider
+      if (authProvider.userCenter == null) {
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        final centerId = await userProvider.getCurrentUserCenterId(context);
+
+        if (centerId != null) {
+          debugPrint('Centro obtenido desde UserProvider: $centerId');
+
+          // Intentar obtener y actualizar los detalles del centro
+          if (userProvider.currentCenter != null) {
+            // Notificar al AuthProvider sobre el nuevo centro
+            await authProvider.updateCenterInfo(userProvider.currentCenter!);
+
+            debugPrint('Información del centro actualizada: ${userProvider.currentCenter!.name}');
+          }
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -276,26 +297,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   );
 
-                  // Primero obtenemos los resultados de análisis actuales
-                  final storageService = AnalysisStorageService();
-                  storageService.getAnalysisResults().then((resultsMap) {
+                  // Obtener resultados de análisis
+                  final analysisService = ImageAnalysisService();
+                  analysisService.getAnalysisResultsByCenter(currentCenterId).then((resultsMap) {
                     // Cerrar diálogo de carga
                     Navigator.pop(context);
 
-                    // Convertir los resultados al formato esperado y filtrar por centro
-                    final Map<String, AnalysisResult> analysisResults = {};
-
-                    resultsMap.forEach((key, value) {
-                      // Verificar si el resultado tiene un centro_id
-                      final resultCenterId = value['center_id'] as int?;
-
-                      // Solo incluir si pertenece al centro actual o si no tiene centro asignado
-                      if (resultCenterId == null || resultCenterId == currentCenterId) {
-                        analysisResults[key] = AnalysisResult.fromJsonMap(value);
-                      }
-                    });
-
-                    if (analysisResults.isEmpty) {
+                    if (resultsMap.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('No hay productos detectados para el centro ${authProvider.userCenter?.name ?? "actual"}'),
@@ -310,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => ProductManagementScreen(
-                          analysisResults: analysisResults,
+                          analysisResults: resultsMap,
                           centerId: currentCenterId,
                         ),
                       ),
@@ -348,7 +356,12 @@ class _HomeScreenState extends State<HomeScreen> {
         description: 'Crear, ver, actualizar y eliminar usuarios del sistema',
         icon: Icons.people,
         onTap: () {
-          Navigator.pushNamed(context, '/users');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const UserListScreen(),
+            ),
+          );
         },
       ),
 
@@ -419,38 +432,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.info_outline,
-            size: 64,
-            color: Colors.blue.shade200,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'No hay opciones disponibles',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Su cuenta no tiene permisos de administrador.',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade700,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
       ),
     );
   }

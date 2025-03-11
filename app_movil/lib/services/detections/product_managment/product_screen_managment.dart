@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
-
 import 'package:path/path.dart' as path;
 
+import '../../../entities/analisysresult.dart';
 import '../../../screens/image_capture_screen.dart';
-import '../image_analisys_service.dart';
+
 
 class ProductManagementScreen extends StatefulWidget {
   final Map<String, AnalysisResult> analysisResults;
-  final int? centerId; // Añadir este parámetro
+  final int? centerId;
 
   const ProductManagementScreen({
     Key? key,
     required this.analysisResults,
-    this.centerId, // Hacerlo opcional para mantener compatibilidad
+    this.centerId,
   }) : super(key: key);
 
   @override
@@ -62,6 +62,8 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestión de Productos'),
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -90,6 +92,9 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
           // Tarjeta de estadísticas
           Card(
             elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -103,6 +108,12 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
                   _buildStatRow('Total de imágenes', '${widget.analysisResults.length}'),
                   _buildStatRow('Total de productos', '${_productCounts.values.fold(0, (sum, count) => sum + count)}'),
                   _buildStatRow('Categorías', '${_productCategories.length}'),
+
+                  // Información del centro si está disponible
+                  if (widget.centerId != null) ...[
+                    const Divider(),
+                    _buildStatRow('Centro ID', '${widget.centerId}'),
+                  ],
                 ],
               ),
             ),
@@ -125,6 +136,9 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
 
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Colors.primaries[index % Colors.primaries.length],
@@ -282,7 +296,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
                       Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: Text(
-                          '${path.basename(imagePath)}',
+                          path.basename(imagePath),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../services/auth_services/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -13,7 +14,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
   bool _obscurePassword = true;
 
   @override
@@ -34,20 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
-
     try {
       await context.read<AuthProvider>().login(
-            _emailController.text.trim(),
-            _passwordController.text,
-          );
-
-      if (mounted) {
-        // Navegar a la pantalla principal
-        // Navigator.of(context).pushReplacement(
-        //   MaterialPageRoute(builder: (_) => const HomeScreen()),
-        // );
-      }
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -61,10 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
       }
     }
   }
@@ -92,7 +79,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!context.watch<AuthProvider>().isInitialized) {
+    final authProvider = Provider.of<AuthProvider>(context);
+
+    if (!authProvider.isInitialized) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(),
@@ -145,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     validator: _validateEmail,
                     textInputAction: TextInputAction.next,
-                    enabled: !_isLoading,
+                    enabled: !authProvider.isLoading,
                   ),
                   const SizedBox(height: 16),
                   // Campo de contraseña
@@ -161,13 +150,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? Icons.visibility_outlined
                               : Icons.visibility_off_outlined,
                         ),
-                        onPressed: _isLoading
+                        onPressed: authProvider.isLoading
                             ? null
                             : () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -180,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     validator: _validatePassword,
                     textInputAction: TextInputAction.done,
                     onFieldSubmitted: (_) => _handleLogin(),
-                    enabled: !_isLoading,
+                    enabled: !authProvider.isLoading,
                   ),
                   const SizedBox(height: 24),
                   // Enlace para registrarse
@@ -199,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
                   // Botón de inicio de sesión
                   ElevatedButton(
-                    onPressed: _isLoading ? null : _handleLogin,
+                    onPressed: authProvider.isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -207,23 +196,53 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: _isLoading
+                    child: authProvider.isLoading
                         ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor:
+                        AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
                         : const Text(
-                            'Iniciar Sesión',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white,
-                            ),
-                          ),
+                      'Iniciar Sesión',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+
+                  // Mostrar mensaje de error si existe
+                  if (authProvider.errorMessage.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Text(
+                        authProvider.errorMessage,
+                        style: TextStyle(color: Colors.red.shade800),
+                      ),
+                    ),
+                  ],
+
+                  // Enlace a la configuración
+                  const SizedBox(height: 24),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/config');
+                    },
+                    icon: const Icon(Icons.settings, size: 16),
+                    label: const Text('Configurar servidor'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.grey,
+                    ),
                   ),
                 ],
               ),

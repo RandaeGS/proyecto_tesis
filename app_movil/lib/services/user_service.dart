@@ -1,215 +1,84 @@
-// lib/services/user_service.dart
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+
 import '../entities/user.dart';
-import '../services/auth_services/auth_service.dart';
-import '../services/config.dart';
+import 'core/api_client.dart';
+import 'core/api_constants.dart';
 
+/// Servicio para manejar operaciones relacionadas con usuarios
 class UserService {
-  static String get baseUrl => AppConfig.getApiUrl();
+  final ApiClient _apiClient = ApiClient();
 
-  // Obtener el token de autenticación
-  Future<String> _getAuthToken() async {
-    final authService = AuthService();
-    final token = await authService.getToken();
-    if (token == null || token.isEmpty) {
-      throw 'No se encontró token de autenticación. Por favor inicie sesión nuevamente.';
-    }
-    return token;
-  }
-
-  // Mostrar detalles de la respuesta HTTP para depuración
-  void _logResponse(http.Response response) {
-    debugPrint('Status code: ${response.statusCode}');
-    debugPrint('Headers: ${response.headers}');
+  /// Obtiene todos los usuarios
+  Future<List<User>> getAllUsers() async {
     try {
-      if (response.body.isNotEmpty) {
-        debugPrint('Body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}...');
-      } else {
-        debugPrint('Body: (vacío)');
-      }
-    } catch (e) {
-      debugPrint('Error al mostrar cuerpo de respuesta: $e');
-    }
-  }
-
-  // Manejar respuesta HTTP con manejo de errores
-  dynamic _handleResponse(http.Response response, {String? entityName}) {
-    _logResponse(response);
-
-    switch (response.statusCode) {
-      case 200:
-      case 201:
-        if (response.body.isEmpty) {
-          return null;
-        }
-        return json.decode(response.body);
-      case 204:
-        return null;
-      case 400:
-        throw 'Error de validación: ${response.body}';
-      case 401:
-        throw 'No autorizado. Por favor inicie sesión nuevamente.';
-      case 403:
-        throw 'No tiene permisos para esta acción. Contacte al administrador.';
-      case 404:
-        if (entityName != null) {
-          throw '$entityName no encontrado.';
-        }
-        throw 'Recurso no encontrado.';
-      case 500:
-        throw 'Error del servidor. Intente más tarde.';
-      default:
-        throw 'Error inesperado (${response.statusCode}): ${response.body}';
-    }
-  }
-
-  // Método para probar diferentes formatos de token si el primero falla
-  Future<http.Response> _makeRequestWithTokenRetry(
-      Future<http.Response> Function(Map<String, String> headers) requestFunction
-      ) async {
-    final token = await _getAuthToken();
-
-    // Lista de formatos de token para probar
-    final tokenFormats = [
-      'Bearer $token',  // Formato JWT común
-      'Token $token',   // Formato usado en algunos sistemas Django Rest Framework
-      token,            // Solo el token sin prefijo
-    ];
-
-    http.Response? lastResponse;
-
-    // Intentar con cada formato de token
-    for (final tokenFormat in tokenFormats) {
-      try {
-        final headers = {
-          'Authorization': tokenFormat,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        };
-
-        debugPrint('Intentando con formato de token: ${tokenFormat.substring(0, tokenFormat.length > 15 ? 15 : tokenFormat.length)}...');
-
-        final response = await requestFunction(headers);
-        lastResponse = response;
-
-        // Si no es 401/403, consideramos que el formato funcionó
-        if (response.statusCode != 401 && response.statusCode != 403) {
-          debugPrint('Formato de token aceptado: ${tokenFormat.split(' ').first}');
-          return response;
-        }
-      } catch (e) {
-        debugPrint('Error con formato de token $tokenFormat: $e');
-      }
-    }
-
-    // Si todos los formatos fallaron, devolver la última respuesta o lanzar una excepción
-    if (lastResponse != null) {
-      return lastResponse;
-    } else {
-      throw 'No se pudo realizar la solicitud con ningún formato de token';
-    }
-  }
-
-  // Obtener todos los usuarios
-  Future<List<User>> getUsers() async {
-    final url = '$baseUrl/api/users/';
-
-    debugPrint('Obteniendo todos los usuarios');
-    debugPrint('URL: $url');
-
-    try {
-      final response = await _makeRequestWithTokenRetry(
-              (headers) => http.get(Uri.parse(url), headers: headers)
+      final data = await _apiClient.get(
+        ApiConstants.users,
+        entityName: 'Usuarios',
       );
 
-      final data = _handleResponse(response, entityName: 'Usuarios');
       if (data is List) {
         return data.map((json) => User.fromJson(json)).toList();
       }
+
       return [];
     } catch (e) {
-      debugPrint('Error en getUsers: $e');
-      // Si no existe el endpoint /api/users/, intentar con la búsqueda
+      debugPrint('Error en getAllUsers: $e');
+
+      // Si falla, intentar con la búsqueda
       try {
         return await searchUsers('');
-      } catch (searchError) {
-        debugPrint('Error también en búsqueda: $searchError');
-        if (e is http.ClientException) {
-          throw 'Error de conexión: verifique su internet';
-        }
+      } catch (_) {
         rethrow;
       }
     }
   }
 
-  // Obtener un usuario por ID
+  /// Obtiene un usuario por su ID (email)
   Future<User> getUserById(String userId) async {
-    final url = '$baseUrl/api/users/$userId/';
-
-    debugPrint('Obteniendo usuario: $userId');
-    debugPrint('URL: $url');
-
     try {
-      final response = await _makeRequestWithTokenRetry(
-              (headers) => http.get(Uri.parse(url), headers: headers)
+      final endpoint = '${ApiConstants.users}$userId/';
+      final data = await _apiClient.get(
+        endpoint,
+        entityName: 'Usuario',
       );
 
-      final data = _handleResponse(response, entityName: 'Usuario');
       return User.fromJson(data);
     } catch (e) {
       debugPrint('Error en getUserById: $e');
-      if (e is http.ClientException) {
-        throw 'Error de conexión: verifique su internet';
-      }
       rethrow;
     }
   }
 
-// Crear un nuevo usuario
+  /// Crea un nuevo usuario
   Future<User> createUser({
     required String email,
     required String password,
     required String name,
     required bool isSuperuser,
     required bool isStaff,
-    String? centerId, // Nuevo parámetro opcional
+    int? centerId,
   }) async {
-    final url = '$baseUrl/users/api/users/create/';
-
-    debugPrint('Creando nuevo usuario');
-    debugPrint('URL: $url');
-
-    // Incluir los datos básicos
-    final Map<String, dynamic> body = {
-      'email': email,
-      'password': password,
-      'name': name,
-      'is_superuser': isSuperuser,
-      'is_staff': isStaff,
-    };
-
-    // Añadir centerId si está disponible
-    if (centerId != null) {
-      body['center_id'] = centerId;
-      debugPrint('Incluyendo centro ID: $centerId');
-    }
-
-    debugPrint('Datos: ${json.encode(body)}');
-
     try {
-      final response = await _makeRequestWithTokenRetry(
-              (headers) => http.post(
-            Uri.parse(url),
-            headers: headers,
-            body: json.encode(body),
-          )
+      final Map<String, dynamic> requestBody = {
+        'email': email,
+        'password': password,
+        'name': name,
+        'is_superuser': isSuperuser,
+        'is_staff': isStaff,
+      };
+
+      // Añadir centerId si está disponible
+      if (centerId != null) {
+        requestBody['center_id'] = centerId;
+      }
+
+      final data = await _apiClient.post(
+        ApiConstants.createUser,
+        requestBody,
+        entityName: 'Usuario',
       );
 
-      final data = _handleResponse(response, entityName: 'Usuario');
-      // Manejamos tanto el caso donde la API devuelve directamente los datos
-      // como cuando los envuelve en un objeto 'data'
+      // Manejar diferentes estructuras de respuesta
       if (data is Map<String, dynamic> && data.containsKey('data')) {
         return User.fromJson(data['data']);
       } else {
@@ -217,44 +86,30 @@ class UserService {
       }
     } catch (e) {
       debugPrint('Error en createUser: $e');
-      if (e is http.ClientException) {
-        throw 'Error de conexión: verifique su internet';
-      }
       rethrow;
     }
   }
 
-  // Actualizar un usuario existente
+  /// Actualiza un usuario existente
   Future<User> updateUser({
     required String userId,
     required String name,
     required bool isSuperuser,
     required bool isStaff,
   }) async {
-    final url = '$baseUrl/api/users/$userId/';
-
-    debugPrint('Actualizando usuario: $userId');
-    debugPrint('URL: $url');
-
-    final body = {
-      'name': name,
-      'is_superuser': isSuperuser,
-      'is_staff': isStaff,
-    };
-
-    debugPrint('Datos: ${json.encode(body)}');
-
     try {
-      final response = await _makeRequestWithTokenRetry(
-              (headers) => http.put(
-            Uri.parse(url),
-            headers: headers,
-            body: json.encode(body),
-          )
+      final endpoint = '${ApiConstants.users}$userId/';
+      final data = await _apiClient.put(
+        endpoint,
+        {
+          'name': name,
+          'is_superuser': isSuperuser,
+          'is_staff': isStaff,
+        },
+        entityName: 'Usuario',
       );
 
-      final data = _handleResponse(response, entityName: 'Usuario');
-      // Manejar tanto respuesta directa como envuelta en 'data'
+      // Manejar diferentes estructuras de respuesta
       if (data is Map<String, dynamic> && data.containsKey('data')) {
         return User.fromJson(data['data']);
       } else {
@@ -262,118 +117,80 @@ class UserService {
       }
     } catch (e) {
       debugPrint('Error en updateUser: $e');
-      if (e is http.ClientException) {
-        throw 'Error de conexión: verifique su internet';
-      }
       rethrow;
     }
   }
 
-  // Actualizar la contraseña de un usuario
+  /// Actualiza la contraseña de un usuario
   Future<void> resetPassword({
     required String userId,
     required String newPassword,
   }) async {
-    final url = '$baseUrl/api/users/$userId/';
-
-    debugPrint('Actualizando contraseña para usuario: $userId');
-    debugPrint('URL: $url');
-
-    final body = {
-      'password': newPassword,
-    };
-
     try {
-      final response = await _makeRequestWithTokenRetry(
-              (headers) => http.patch(
-            Uri.parse(url),
-            headers: headers,
-            body: json.encode(body),
-          )
+      final endpoint = '${ApiConstants.users}$userId/';
+      await _apiClient.patch(
+        endpoint,
+        {
+          'password': newPassword,
+        },
+        entityName: 'Usuario',
       );
-
-      _handleResponse(response, entityName: 'Usuario');
     } catch (e) {
       debugPrint('Error en resetPassword: $e');
-      if (e is http.ClientException) {
-        throw 'Error de conexión: verifique su internet';
-      }
       rethrow;
     }
   }
 
-  // Eliminar un usuario
+  /// Elimina un usuario
   Future<void> deleteUser(String userId) async {
-    final url = '$baseUrl/api/users/$userId/';
-
-    debugPrint('Eliminando usuario: $userId');
-    debugPrint('URL: $url');
-
     try {
-      final response = await _makeRequestWithTokenRetry(
-              (headers) => http.delete(Uri.parse(url), headers: headers)
+      final endpoint = '${ApiConstants.users}$userId/';
+      await _apiClient.delete(
+        endpoint,
+        entityName: 'Usuario',
       );
-
-      _handleResponse(response, entityName: 'Usuario');
     } catch (e) {
       debugPrint('Error en deleteUser: $e');
-      if (e is http.ClientException) {
-        throw 'Error de conexión: verifique su internet';
-      }
       rethrow;
     }
   }
 
-  // Buscar usuarios
+  /// Busca usuarios por una consulta
   Future<List<User>> searchUsers(String query) async {
-    final url = '$baseUrl/api/users/search/?q=$query';
-
-    debugPrint('Buscando usuarios: $query');
-    debugPrint('URL: $url');
-
     try {
-      final response = await _makeRequestWithTokenRetry(
-              (headers) => http.get(Uri.parse(url), headers: headers)
+      final endpoint = '${ApiConstants.users}search/?q=$query';
+      final data = await _apiClient.get(
+        endpoint,
+        entityName: 'Usuarios',
       );
 
-      final data = _handleResponse(response, entityName: 'Usuarios');
       if (data is List) {
         return data.map((json) => User.fromJson(json)).toList();
       }
+
       return [];
     } catch (e) {
       debugPrint('Error en searchUsers: $e');
-      if (e is http.ClientException) {
-        throw 'Error de conexión: verifique su internet';
-      }
       rethrow;
     }
   }
 
-  // Asignar usuario a un centro
+  /// Asigna un usuario a un centro
   Future<User> assignUserToCenter({
     required String userId,
-    required String centerId,
+    required int centerId,
   }) async {
-    final url = '$baseUrl/api/users/$userId/assign-center/';
-
-    debugPrint('Asignando usuario $userId al centro $centerId');
-    debugPrint('URL: $url');
-
-    final body = {
-      'center_id': centerId,
-    };
-
     try {
-      final response = await _makeRequestWithTokenRetry(
-              (headers) => http.put(
-            Uri.parse(url),
-            headers: headers,
-            body: json.encode(body),
-          )
+      final endpoint = '${ApiConstants.users}$userId/assign-center/';
+      final data = await _apiClient.put(
+        endpoint,
+        {
+          'center_id': centerId.toString(),
+        },
+        entityName: 'Usuario',
       );
 
-      final data = _handleResponse(response, entityName: 'Usuario');
+      // Manejar diferentes estructuras de respuesta
       if (data is Map<String, dynamic> && data.containsKey('data')) {
         return User.fromJson(data['data']);
       } else {
@@ -381,37 +198,26 @@ class UserService {
       }
     } catch (e) {
       debugPrint('Error en assignUserToCenter: $e');
-      if (e is http.ClientException) {
-        throw 'Error de conexión: verifique su internet';
-      }
       rethrow;
     }
   }
 
-  // Eliminar usuario de un centro
+  /// Elimina un usuario de un centro
   Future<User> removeUserFromCenter({
     required String userId,
-    required String centerId,
+    required int centerId,
   }) async {
-    final url = '$baseUrl/api/users/$userId/remove-center/';
-
-    debugPrint('Eliminando usuario $userId del centro $centerId');
-    debugPrint('URL: $url');
-
-    final body = {
-      'center_id': centerId,
-    };
-
     try {
-      final response = await _makeRequestWithTokenRetry(
-              (headers) => http.put(
-            Uri.parse(url),
-            headers: headers,
-            body: json.encode(body),
-          )
+      final endpoint = '${ApiConstants.users}$userId/remove-center/';
+      final data = await _apiClient.put(
+        endpoint,
+        {
+          'center_id': centerId,
+        },
+        entityName: 'Usuario',
       );
 
-      final data = _handleResponse(response, entityName: 'Usuario');
+      // Manejar diferentes estructuras de respuesta
       if (data is Map<String, dynamic> && data.containsKey('data')) {
         return User.fromJson(data['data']);
       } else {
@@ -419,9 +225,34 @@ class UserService {
       }
     } catch (e) {
       debugPrint('Error en removeUserFromCenter: $e');
-      if (e is http.ClientException) {
-        throw 'Error de conexión: verifique su internet';
+      rethrow;
+    }
+  }
+
+
+
+  /// Obtiene un usuario por su email con información completa (incluye centros)
+  Future<Map<String, dynamic>> getUserByEmail(String email) async {
+    try {
+      final endpoint = '${ApiConstants.userByEmail}$email/';
+      debugPrint('Consultando información completa del usuario: $endpoint');
+
+      final data = await _apiClient.get(
+        endpoint,
+        entityName: 'Usuario',
+      );
+
+      if (data is Map<String, dynamic>) {
+        debugPrint('Información del usuario recibida: ${data.keys}');
+        if (data.containsKey('centers')) {
+          debugPrint('Centros encontrados: ${data['centers'].length}');
+        }
+        return data;
       }
+
+      throw 'Formato de respuesta inesperado';
+    } catch (e) {
+      debugPrint('Error en getUserByEmail: $e');
       rethrow;
     }
   }

@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
+import 'package:provider/provider.dart';
 
-import '../services/deteccion_services/save_deteccion_service.dart';
-import '../services/detections/image_analisys_service.dart';
+import '../entities/analisysresult.dart';
+import '../services/auth_services/auth_provider.dart';
+import '../services/deteccion_services/analysis_provider.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({Key? key}) : super(key: key);
@@ -16,14 +18,8 @@ class ImageCaptureScreen extends StatefulWidget {
 
 class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   final ImagePicker _picker = ImagePicker();
-  final ImageAnalysisService _analysisService = ImageAnalysisService();
-  final AnalysisStorageService _storageService = AnalysisStorageService();
   List<File> _capturedImages = [];
   bool _isLoading = false;
-  String _selectedModel = "yolo";
-
-  // Mapa para almacenar los resultados
-  Map<String, AnalysisResult> _analysisResults = {};
 
   @override
   void initState() {
@@ -34,20 +30,19 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
 
   // Cargar análisis guardados
   Future<void> _loadAnalysisResults() async {
-    final Map<String, dynamic> storedResults = await _storageService.getAnalysisResults();
-
-    // Convertir resultados guardados al formato correcto
-    final Map<String, AnalysisResult> loadedResults = {};
-
-    storedResults.forEach((key, value) {
-      loadedResults[key] = AnalysisResult.fromJsonMap(value);
-    });
-
-    setState(() {
-      _analysisResults = loadedResults;
-    });
+    try {
+      await Provider.of<AnalysisProvider>(context, listen: false).loadAnalysisResults();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar análisis guardados: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
-
 
   Future<void> _loadSavedImages() async {
     setState(() {
@@ -114,20 +109,24 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           _isLoading = true; // Activar indicador de carga
         });
 
+        // Obtener el ID del centro actual
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final centerId = authProvider.centerId;
+
         // Analizar la imagen
         try {
-          final result = await _analysisService.analyzeImage(savedImage, _selectedModel);
-
-          // Guardar el resultado en storage
-          await _storageService.saveAnalysisResult(savedImage.path, result);
+          final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
+          final result = await analysisProvider.analyzeImage(
+            savedImage,
+            centerId: centerId,
+          );
 
           setState(() {
-            _analysisResults[savedImage.path] = result;
             _isLoading = false;
           });
 
           // Mostrar el resultado del análisis
-          if (mounted) {
+          if (mounted && result != null) {
             _showAnalysisResults(result);
           }
         } catch (e) {
@@ -160,11 +159,10 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
       await image.delete();
 
       // También eliminar del almacenamiento
-      await _storageService.removeAnalysisResult(image.path);
+      await Provider.of<AnalysisProvider>(context, listen: false).removeAnalysisResult(image.path);
 
       setState(() {
         _capturedImages.remove(image);
-        _analysisResults.remove(image.path);
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -233,6 +231,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   }
 
   void _showImageOptions() {
+    final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -258,7 +258,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                 labelText: 'Modelo de detección',
                 border: OutlineInputBorder(),
               ),
-              value: _selectedModel,
+              value: analysisProvider.selectedModel,
               items: const [
                 DropdownMenuItem(value: 'yolo', child: Text('YOLO')),
                 DropdownMenuItem(value: 'mask_rcnn', child: Text('Mask R-CNN')),
@@ -266,9 +266,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
               ],
               onChanged: (value) {
                 if (value != null) {
-                  setState(() {
-                    _selectedModel = value;
-                  });
+                  analysisProvider.setSelectedModel(value);
                 }
               },
             ),
@@ -312,12 +310,15 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   }
 
   void _viewImage(File image) {
+    final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
+    final analysisResult = analysisProvider.analysisResults[image.path];
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ImageDetailScreen(
           image: image,
-          analysisResult: _analysisResults[image.path],
+          analysisResult: analysisResult,
         ),
       ),
     );
@@ -377,6 +378,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   }
 
   Widget _buildImageGrid() {
+    final analysisProvider = Provider.of<AnalysisProvider>(context);
+
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -388,7 +391,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
       itemCount: _capturedImages.length,
       itemBuilder: (context, index) {
         final image = _capturedImages[index];
-        final hasAnalysis = _analysisResults.containsKey(image.path);
+        final hasAnalysis = analysisProvider.analysisResults.containsKey(image.path);
 
         return _buildImageCard(image, hasAnalysis);
       },
@@ -454,13 +457,18 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                         ),
                         if (hasAnalysis) ...[
                           const SizedBox(height: 2),
-                          Text(
-                            'Objetos: ${_analysisResults[image.path]!.numeroObjetos}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade700,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Consumer<AnalysisProvider>(
+                            builder: (context, provider, _) {
+                              final result = provider.analysisResults[image.path];
+                              return Text(
+                                'Objetos: ${result?.numeroObjetos ?? 0}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade700,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ],
@@ -618,6 +626,7 @@ class ImageDetailScreen extends StatelessWidget {
       ),
     );
   }
+
   Widget _buildDetailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
@@ -719,7 +728,7 @@ class ImageDetailScreen extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             '$label: ',
-            style: TextStyle(color: Colors.white70),
+            style: const TextStyle(color: Colors.white70),
           ),
           Text(
             value,

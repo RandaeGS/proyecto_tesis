@@ -1,13 +1,12 @@
-// lib/services/user_provider.dart
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../entities/user.dart';
+
 import '../entities/center.dart' as app_center;
+import '../entities/user.dart';
 import '../services/user_service.dart';
 import '../services/center_service.dart';
-import '../services/auth_services/auth_provider.dart';
-import '../services/auth_services/auth_service.dart';
+import 'auth_services/auth_service.dart';
 
+/// Provider para manejar operaciones y estado de usuarios
 class UserProvider with ChangeNotifier {
   final UserService _userService = UserService();
   final CenterService _centerService = CenterService();
@@ -24,69 +23,72 @@ class UserProvider with ChangeNotifier {
   String get errorMessage => _errorMessage;
   app_center.Center? get currentCenter => _currentCenter;
 
-  // Método para manejar errores de autorización
+  /// Maneja errores de autorización
   void _handleAuthError(String error) async {
     if (error.contains('No autorizado') || error.contains('401') || error.contains('403')) {
       debugPrint('Error de autorización detectado: $error');
-      // Si es un error de autorización, podríamos intentar renovar el token
-      try {
-        // Implementar lógica de renovación de token si es necesario
-        // Por ahora, simplemente notificamos para que se vuelva a iniciar sesión
-        await _authService.clearAuthData();
-        _errorMessage = 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.';
-      } catch (e) {
-        _errorMessage = 'Error de autorización: $error';
-      }
+      // Si es un error de autorización, notificamos para que se vuelva a iniciar sesión
+      await _authService.logout();
+      _errorMessage = 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.';
     } else {
       _errorMessage = error;
     }
   }
 
-  // Método para obtener el ID del centro del usuario actual
+  /// Obtiene el ID del centro del usuario actual directamente del backend
   Future<int?> getCurrentUserCenterId(BuildContext context) async {
     try {
-      // Obtenemos el provider de autenticación
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
-      // Si el usuario ya tiene un centro asignado, lo usamos
-      if (authProvider.centerId != null) {
-        debugPrint('Centro del usuario: ${authProvider.centerId}');
-        return authProvider.centerId;
+      // Obtener el usuario actual para usar su email
+      final user = await _authService.getSavedUser();
+      if (user == null) {
+        debugPrint('No hay usuario autenticado');
+        return null;
       }
 
-      // Si no tienen un centro asignado pero tenemos acceso a su información
-      // intentamos cargarlo desde las preferencias compartidas
-      if (authProvider.user != null) {
-        final centerData = await _authService.getSavedCenter();
-        if (centerData != null) {
-          final center = app_center.Center.fromJson(centerData);
-          debugPrint('Centro cargado desde preferencias: ${center.id}');
-          return center.id;
+      // Hacer petición al endpoint para obtener información completa del usuario
+      debugPrint('Consultando información del usuario por email: ${user.email}');
+      final userData = await _userService.getUserByEmail(user.email);
+
+      // Verificar si tiene centros asignados
+      if (userData.containsKey('centers') &&
+          userData['centers'] is List &&
+          (userData['centers'] as List).isNotEmpty) {
+
+        // Obtener el primer centro (podría implementarse una selección)
+        final centerData = userData['centers'][0];
+        final centerId = centerData['id'];
+
+        debugPrint('Centro obtenido desde API: ${centerData['name']} (ID: $centerId)');
+
+        // Actualizar el centro actual en el provider
+        if (_currentCenter == null || _currentCenter!.id != centerId) {
+          _currentCenter = app_center.Center.fromJson(centerData);
         }
+
+        return centerId;
       }
 
-      // Como último recurso, intentamos obtener el primer centro (para administradores)
-      if (authProvider.user?.isSuperuser == true) {
-        try {
-          final centers = await _centerService.getAllCenters();
-          if (centers.isNotEmpty) {
-            debugPrint('Primer centro disponible: ${centers[0].id}');
-            return centers[0].id;
-          }
-        } catch (e) {
-          debugPrint('Error al obtener centros: $e');
-        }
-      }
-
-      debugPrint('No se pudo determinar el centro del usuario');
+      debugPrint('El usuario no tiene centros asignados según la API');
       return null;
     } catch (e) {
-      debugPrint('Error al obtener centerId: $e');
+      debugPrint('Error al obtener centerId desde API: $e');
+
+      // Si falla la petición al API, intentar con datos guardados como fallback
+      try {
+        final center = await _authService.getSavedCenter();
+        if (center != null) {
+          debugPrint('Usando centro guardado localmente como fallback: ${center.id}');
+          return center.id;
+        }
+      } catch (fallbackError) {
+        debugPrint('Error al obtener centro guardado localmente: $fallbackError');
+      }
+
       return null;
     }
   }
 
-  // Método para cargar los usuarios del centro actual
+  /// Carga los usuarios de un centro específico
   Future<void> loadUsers(int centerId) async {
     _isLoading = true;
     _errorMessage = '';
@@ -97,7 +99,7 @@ class UserProvider with ChangeNotifier {
 
       // Primero obtenemos los datos del centro
       try {
-        _currentCenter = await _centerService.getCenterById(centerId.toString());
+        _currentCenter = await _centerService.getCenterById(centerId);
         debugPrint('Centro obtenido: ${_currentCenter?.name} (ID: ${_currentCenter?.id})');
       } catch (e) {
         debugPrint('Error al obtener centro: $e');
@@ -106,7 +108,7 @@ class UserProvider with ChangeNotifier {
 
       // Luego obtenemos los usuarios asociados a ese centro
       try {
-        final List<User> centerUsers = await _centerService.getCenterUsers(centerId.toString());
+        final List<User> centerUsers = await _centerService.getCenterUsers(centerId);
         debugPrint('Usuarios obtenidos: ${centerUsers.length}');
         _users = centerUsers;
       } catch (e) {
@@ -124,7 +126,7 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  // Método para buscar usuarios dentro del centro
+  /// Busca usuarios con un criterio específico
   Future<void> searchUsers(int centerId, String query) async {
     if (query.isEmpty) {
       await loadUsers(centerId);
@@ -136,11 +138,8 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Implementar búsqueda de usuarios específica del centro
+      // Buscar usuarios específicos
       final usersData = await _userService.searchUsers(query);
-
-      // Filtramos los usuarios que pertenecen al centro actual
-      // Esto es en caso de que el backend no soporte filtrado combinado
       _users = usersData;
 
       _isLoading = false;
@@ -152,7 +151,7 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  // Método para crear un usuario en el centro actual
+  /// Crea un nuevo usuario en el centro especificado
   Future<bool> createUser({
     required int centerId,
     required String email,
@@ -166,21 +165,22 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Pasar centerId directamente al método createUser
+      // Crear usuario asignándole el centro directamente
       final user = await _userService.createUser(
         email: email,
         password: password,
         name: name,
         isSuperuser: isSuperuser,
         isStaff: isStaff,
-        centerId: centerId.toString(), // Pasar el centerId
+        centerId: centerId,
       );
 
-      // Intentar asignar al centro como respaldo (por si el backend no procesó la asignación)
+      // Como respaldo, intentar asignar al centro
+      // (por si el backend no procesó la asignación)
       try {
         await _userService.assignUserToCenter(
           userId: user.email,
-          centerId: centerId.toString(),
+          centerId: centerId,
         );
         debugPrint('Usuario asignado al centro mediante llamada adicional');
       } catch (assignError) {
@@ -199,7 +199,7 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  // Método para actualizar un usuario
+  /// Actualiza un usuario existente
   Future<bool> updateUser({
     required int centerId,
     required String userId,
@@ -231,7 +231,7 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  // Método para eliminar un usuario
+  /// Elimina un usuario
   Future<bool> deleteUser(int centerId, String userId) async {
     _isLoading = true;
     _errorMessage = '';
@@ -252,7 +252,7 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  // Método para restablecer la contraseña de un usuario
+  /// Restablece la contraseña de un usuario
   Future<bool> resetPassword({
     required String userId,
     required String newPassword,

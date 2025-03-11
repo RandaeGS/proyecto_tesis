@@ -1,8 +1,10 @@
-import 'package:app_movil/screens/auth_screens/config_screen.dart';
+import 'package:app_movil/services/auth_services/auth_provider.dart';
+import 'package:app_movil/services/deteccion_services/analysis_provider.dart';
+import 'package:app_movil/services/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'services/auth_services/auth_provider.dart';
-import 'services/user_provider.dart'; // Importamos nuestro nuevo provider
+
+import 'screens/auth_screens/config_screen.dart';
 import 'screens/auth_screens/login_screen.dart';
 import 'screens/auth_screens/register_screen.dart';
 import 'screens/home_screen.dart';
@@ -15,13 +17,14 @@ void main() async {
 
   // Inicializar la configuración
   await AppConfig.initializeConfig();
-  print('API URL configurada: ${AppConfig.getApiUrl()}');
+  debugPrint('API URL configurada: ${AppConfig.getApiUrl()}');
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => UserProvider()), // Añadimos el UserProvider
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => AnalysisProvider()),
       ],
       child: const MyApp(),
     ),
@@ -35,7 +38,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Mi Aplicación',
+      title: 'Mi Centro',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         scaffoldBackgroundColor: Colors.white,
