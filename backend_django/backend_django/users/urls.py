@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from center.api.views import CenterViewSet, CenterUsersView
 from .api.views import (
     UserSearchView, UserCreateView, UserDetailView,
-    UserAssignToCenterView, UserRemoveFromCenterView
+    UserAssignToCenterView, UserRemoveFromCenterView, UserByEmailView
 )
 from .views import user_detail_view
 from .views import user_redirect_view
@@ -38,7 +38,7 @@ urlpatterns = [
     path('api/users/<int:pk>/', UserDetailView.as_view(), name='user-detail'),
     path('api/users/<int:pk>/assign-center/', UserAssignToCenterView.as_view(), name='user-assign-center'),
     path('api/users/<int:pk>/remove-center/', UserRemoveFromCenterView.as_view(), name='user-remove-center'),
-
+    path('api/users/by-email/<str:email>/', UserByEmailView.as_view(), name='user-by-email'),
     # Incluir router de usuarios (descomentar si quieres usar el ViewSet completo)
     # path('api/', include(user_router.urls)),
 ]

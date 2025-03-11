@@ -6,22 +6,54 @@ from rest_framework.exceptions import NotFound
 from rest_framework.mixins import ListModelMixin
 from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.mixins import UpdateModelMixin
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
 
 from center.models import Center
 
-from .serializers import UserSerializer, UserSerializerForCenter
+from .serializers import UserSerializer, UserSerializerForCenter, UserWithCentersSerializer
 
 User = get_user_model()
 
+
+class UserByEmailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, email):
+        try:
+            # Buscar usuario por email
+            user = User.objects.get(email=email)
+
+            # Verificar permisos (solo el propio usuario o un admin puede ver los datos)
+            if request.user.is_superuser or request.user.email == email:
+                serializer = UserWithCentersSerializer(user)  # Usar el nuevo serializer
+                return Response(serializer.data)
+            else:
+                return Response(
+                    {"error": "No tiene permisos para ver este usuario"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except User.DoesNotExist:
+            return Response(
+                {"error": f"Usuario con email {email} no encontrado"},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 # API para crear un nuevo usuario
 class UserCreateView(generics.CreateAPIView):
     serializer_class = UserSerializer
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        # Asegurarse de que center_id esté incluido en los datos
+        data = request.data.copy()
+
+        # Si no viene en la solicitud, intentar obtenerlo de la URL
+        if 'center_id' not in data and 'center_id' in kwargs:
+            data['center_id'] = kwargs.get('center_id')
+
+        serializer = self.get_serializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(
@@ -29,7 +61,6 @@ class UserCreateView(generics.CreateAPIView):
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 # API para obtener, actualizar y eliminar usuario por ID
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
