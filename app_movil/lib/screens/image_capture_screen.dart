@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 
+import '../services/detections/image_analisys_service.dart';
+
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({Key? key}) : super(key: key);
 
@@ -13,8 +15,13 @@ class ImageCaptureScreen extends StatefulWidget {
 
 class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   final ImagePicker _picker = ImagePicker();
+  final ImageAnalysisService _analysisService = ImageAnalysisService();
   List<File> _capturedImages = [];
   bool _isLoading = false;
+  String _selectedModel = "yolo"; // Modelo por defecto
+
+  // Mapa para almacenar los resultados de análisis por imagen
+  Map<String, AnalysisResult> _analysisResults = {};
 
   @override
   void initState() {
@@ -81,9 +88,39 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
 
         await savedImage.writeAsBytes(await photo.readAsBytes());
 
+        // Actualizar la UI con la nueva imagen
         setState(() {
           _capturedImages.add(savedImage);
+          _isLoading = true; // Activar indicador de carga
         });
+
+        // Analizar la imagen
+        try {
+          final result = await _analysisService.analyzeImage(savedImage, _selectedModel);
+
+          setState(() {
+            _analysisResults[savedImage.path] = result;
+            _isLoading = false;
+          });
+
+          // Mostrar el resultado del análisis
+          if (mounted) {
+            _showAnalysisResults(result);
+          }
+        } catch (e) {
+          setState(() {
+            _isLoading = false;
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error al analizar imagen: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -100,6 +137,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
       await image.delete();
       setState(() {
         _capturedImages.remove(image);
+        _analysisResults.remove(image.path);
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -116,6 +154,55 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         ),
       );
     }
+  }
+
+  void _showAnalysisResults(AnalysisResult result) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Resultados del Análisis'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildResultRow('ID', result.id),
+              _buildResultRow('Fecha', result.fechaCreacion),
+              _buildResultRow('Modelo', result.tipoModelo),
+              _buildResultRow('Objetos detectados', result.numeroObjetos.toString()),
+              _buildResultRow('Tiempo de procesamiento', '${result.tiempoProcesamiento.toStringAsFixed(2)} s'),
+              const Divider(),
+              const Text('Resultados:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Text(result.resultados),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$label: ',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
   }
 
   void _showImageOptions() {
@@ -136,6 +223,29 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
+            const SizedBox(height: 8),
+
+            // Selector de modelo
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(
+                labelText: 'Modelo de detección',
+                border: OutlineInputBorder(),
+              ),
+              value: _selectedModel,
+              items: const [
+                DropdownMenuItem(value: 'yolo', child: Text('YOLO')),
+                DropdownMenuItem(value: 'mask_rcnn', child: Text('Mask R-CNN')),
+                DropdownMenuItem(value: 'ssd', child: Text('SSD')),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _selectedModel = value;
+                  });
+                }
+              },
+            ),
+
             const SizedBox(height: 16),
             ListTile(
               leading: Container(
@@ -178,7 +288,10 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ImageDetailScreen(image: image),
+        builder: (context) => ImageDetailScreen(
+          image: image,
+          analysisResult: _analysisResults[image.path],
+        ),
       ),
     );
   }
@@ -187,7 +300,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Imágenes'),
+        title: const Text('Imágenes y Análisis'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
       ),
@@ -248,12 +361,14 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
       itemCount: _capturedImages.length,
       itemBuilder: (context, index) {
         final image = _capturedImages[index];
-        return _buildImageCard(image);
+        final hasAnalysis = _analysisResults.containsKey(image.path);
+
+        return _buildImageCard(image, hasAnalysis);
       },
     );
   }
 
-  Widget _buildImageCard(File image) {
+  Widget _buildImageCard(File image, bool hasAnalysis) {
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(
@@ -266,12 +381,34 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                child: Image.file(
-                  image,
-                  fit: BoxFit.cover,
-                ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    child: Image.file(
+                      image,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  if (hasAnalysis)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.check_circle,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             Padding(
@@ -280,10 +417,26 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      path.basename(image.path),
-                      style: const TextStyle(fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          path.basename(image.path),
+                          style: const TextStyle(fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (hasAnalysis) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Objetos: ${_analysisResults[image.path]!.numeroObjetos}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   IconButton(
@@ -335,8 +488,74 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
 
 class ImageDetailScreen extends StatelessWidget {
   final File image;
+  final AnalysisResult? analysisResult;
 
-  const ImageDetailScreen({Key? key, required this.image}) : super(key: key);
+  const ImageDetailScreen({
+    Key? key,
+    required this.image,
+    this.analysisResult,
+  }) : super(key: key);
+
+  void _showAnalysisDetails(BuildContext context) {
+    if (analysisResult == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Detalles del análisis'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('ID', analysisResult!.id),
+              _buildDetailRow('Fecha', analysisResult!.fechaCreacion),
+              _buildDetailRow('Modelo', analysisResult!.tipoModelo),
+              _buildDetailRow('Objetos detectados', analysisResult!.numeroObjetos.toString()),
+              _buildDetailRow('Tiempo', '${analysisResult!.tiempoProcesamiento.toStringAsFixed(2)} s'),
+              const Divider(),
+              const Text('Objetos detectados:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  analysisResult!.resultados,
+                  style: const TextStyle(fontFamily: 'monospace'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$label: ',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -347,18 +566,93 @@ class ImageDetailScreen extends StatelessWidget {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          if (analysisResult != null)
+            IconButton(
+              icon: const Icon(Icons.data_usage),
+              onPressed: () => _showAnalysisDetails(context),
+              tooltip: 'Ver resultados del análisis',
+            ),
+        ],
       ),
-      body: Center(
-        child: InteractiveViewer(
-          panEnabled: true,
-          boundaryMargin: const EdgeInsets.all(20),
-          minScale: 0.5,
-          maxScale: 4,
-          child: Image.file(
-            image,
-            fit: BoxFit.contain,
+      body: Column(
+        children: [
+          Expanded(
+            child: InteractiveViewer(
+              panEnabled: true,
+              boundaryMargin: const EdgeInsets.all(20),
+              minScale: 0.5,
+              maxScale: 4,
+              child: Image.file(
+                image,
+                fit: BoxFit.contain,
+              ),
+            ),
           ),
-        ),
+
+          // Mostrar resumen de resultados si hay análisis
+          if (analysisResult != null)
+            Container(
+              width: double.infinity,
+              color: Colors.black.withOpacity(0.8),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Análisis con ${analysisResult!.tipoModelo.toUpperCase()}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildStatItem(
+                          'Objetos',
+                          analysisResult!.numeroObjetos.toString(),
+                          Icons.policy
+                      ),
+                      _buildStatItem(
+                          'Tiempo',
+                          '${analysisResult!.tiempoProcesamiento.toStringAsFixed(2)}s',
+                          Icons.timer
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _showAnalysisDetails(context),
+                        icon: const Icon(Icons.info_outline, color: Colors.blue),
+                        label: const Text('Detalles', style: TextStyle(color: Colors.blue)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, IconData icon) {
+    return Expanded(
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white70, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            '$label: ',
+            style: TextStyle(color: Colors.white70),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }
