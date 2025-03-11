@@ -14,10 +14,53 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Verificar si necesitamos cargar la información del centro
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      if (authProvider.isAuthenticated && authProvider.userCenter == null) {
+        _loadCenterInfo();
+      }
+    });
+  }
+
+  // Cargar información del centro
+  Future<void> _loadCenterInfo() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.refreshCenterInfo();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar información del centro: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
+    final userCenter = authProvider.userCenter;
     final isAdmin = user?.isSuperuser ?? false;
 
     return Scaffold(
@@ -26,13 +69,21 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         actions: [
+          // Botón para recargar información del centro
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualizar centro',
+            onPressed: _isLoading ? null : _loadCenterInfo,
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => _showLogoutConfirmation(context),
           ),
         ],
       ),
-      body: SafeArea(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -105,12 +156,64 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
+
+                      // Mostrar información del centro si está disponible
+                      if (userCenter != null) ...[
+                        const Divider(height: 24),
+                        Text(
+                          'Centro de acopio:',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.business,
+                              size: 18,
+                              color: Colors.blue.shade700,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                userCenter.name,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              size: 18,
+                              color: Colors.grey.shade700,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                userCenter.address,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // Título de sección
               Text(
@@ -144,14 +247,63 @@ class _HomeScreenState extends State<HomeScreen> {
                 description: 'Visualizar y gestionar productos detectados',
                 icon: Icons.inventory,
                 onTap: () {
+                  // Verificar que el usuario tenga un centro asignado
+                  if (authProvider.centerId == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No tiene un centro asignado'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+
+                  // Obtener el ID del centro del usuario
+                  final int currentCenterId = authProvider.centerId!;
+
+                  // Mostrar indicador de carga
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const AlertDialog(
+                      content: Row(
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(width: 20),
+                          Text("Cargando productos..."),
+                        ],
+                      ),
+                    ),
+                  );
+
                   // Primero obtenemos los resultados de análisis actuales
                   final storageService = AnalysisStorageService();
                   storageService.getAnalysisResults().then((resultsMap) {
-                    // Convertir los resultados al formato esperado
+                    // Cerrar diálogo de carga
+                    Navigator.pop(context);
+
+                    // Convertir los resultados al formato esperado y filtrar por centro
                     final Map<String, AnalysisResult> analysisResults = {};
+
                     resultsMap.forEach((key, value) {
-                      analysisResults[key] = AnalysisResult.fromJsonMap(value);
+                      // Verificar si el resultado tiene un centro_id
+                      final resultCenterId = value['center_id'] as int?;
+
+                      // Solo incluir si pertenece al centro actual o si no tiene centro asignado
+                      if (resultCenterId == null || resultCenterId == currentCenterId) {
+                        analysisResults[key] = AnalysisResult.fromJsonMap(value);
+                      }
                     });
+
+                    if (analysisResults.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('No hay productos detectados para el centro ${authProvider.userCenter?.name ?? "actual"}'),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                      return;
+                    }
 
                     // Navegar a la pantalla de gestión
                     Navigator.push(
@@ -159,7 +311,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       MaterialPageRoute(
                         builder: (context) => ProductManagementScreen(
                           analysisResults: analysisResults,
+                          centerId: currentCenterId,
                         ),
+                      ),
+                    );
+                  }).catchError((error) {
+                    // Cerrar diálogo en caso de error
+                    Navigator.pop(context);
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error al cargar datos: $error'),
+                        backgroundColor: Colors.red,
                       ),
                     );
                   });

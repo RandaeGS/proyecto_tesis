@@ -167,26 +167,34 @@ class UserService {
     }
   }
 
-  // Crear un nuevo usuario
+// Crear un nuevo usuario
   Future<User> createUser({
     required String email,
     required String password,
     required String name,
     required bool isSuperuser,
     required bool isStaff,
+    String? centerId, // Nuevo parámetro opcional
   }) async {
     final url = '$baseUrl/users/api/users/create/';
 
     debugPrint('Creando nuevo usuario');
     debugPrint('URL: $url');
 
-    final body = {
+    // Incluir los datos básicos
+    final Map<String, dynamic> body = {
       'email': email,
       'password': password,
       'name': name,
       'is_superuser': isSuperuser,
       'is_staff': isStaff,
     };
+
+    // Añadir centerId si está disponible
+    if (centerId != null) {
+      body['center_id'] = centerId;
+      debugPrint('Incluyendo centro ID: $centerId');
+    }
 
     debugPrint('Datos: ${json.encode(body)}');
 

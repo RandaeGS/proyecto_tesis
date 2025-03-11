@@ -166,23 +166,26 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Crear el usuario
+      // Pasar centerId directamente al método createUser
       final user = await _userService.createUser(
         email: email,
         password: password,
         name: name,
         isSuperuser: isSuperuser,
         isStaff: isStaff,
+        centerId: centerId.toString(), // Pasar el centerId
       );
 
-      // Asignar usuario al centro si fue creado exitosamente
+      // Intentar asignar al centro como respaldo (por si el backend no procesó la asignación)
       try {
         await _userService.assignUserToCenter(
           userId: user.email,
           centerId: centerId.toString(),
         );
+        debugPrint('Usuario asignado al centro mediante llamada adicional');
       } catch (assignError) {
-        debugPrint('Error al asignar usuario al centro: $assignError');
+        debugPrint('Error o redundancia al asignar usuario al centro: $assignError');
+        // No hacemos fallar la operación si esto falla, ya que podría ser redundante
       }
 
       // Recargar la lista de usuarios

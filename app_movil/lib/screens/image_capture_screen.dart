@@ -6,7 +6,6 @@ import 'package:path/path.dart' as path;
 
 import '../services/deteccion_services/save_deteccion_service.dart';
 import '../services/detections/image_analisys_service.dart';
-import '../services/detections/product_managment/product_screen_managment.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({Key? key}) : super(key: key);
@@ -331,23 +330,6 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         title: const Text('Imágenes y Análisis'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
-        actions: [
-          // Añadir botón de gestión de productos
-          IconButton(
-            icon: const Icon(Icons.inventory),
-            tooltip: 'Gestión de productos',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProductManagementScreen(
-                    analysisResults: _analysisResults,
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showImageOptions,
@@ -361,6 +343,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           : _buildImageGrid(),
     );
   }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(

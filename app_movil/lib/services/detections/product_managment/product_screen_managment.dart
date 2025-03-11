@@ -8,10 +8,12 @@ import '../image_analisys_service.dart';
 
 class ProductManagementScreen extends StatefulWidget {
   final Map<String, AnalysisResult> analysisResults;
+  final int? centerId; // Añadir este parámetro
 
   const ProductManagementScreen({
     Key? key,
     required this.analysisResults,
+    this.centerId, // Hacerlo opcional para mantener compatibilidad
   }) : super(key: key);
 
   @override

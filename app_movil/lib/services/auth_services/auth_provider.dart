@@ -33,8 +33,11 @@ class AuthProvider with ChangeNotifier {
         final centerData = await _authService.getSavedCenter();
         if (centerData != null) {
           _userCenter = app_center.Center.fromJson(centerData);
-          _centerId = _userCenter?.id;  // Usamos el ID numérico
+          _centerId = _userCenter?.id;
           debugPrint('Centro cargado: ${_userCenter?.name} (ID: $_centerId)');
+        } else if (_user != null) {
+          // Si tenemos usuario pero no centro, intentar cargar la información
+          await loadUserWithCenters();
         }
       }
     } catch (e) {
@@ -59,14 +62,8 @@ class AuthProvider with ChangeNotifier {
       _user = User.fromJson(userData);
       _isAuthenticated = true;
 
-      // Guardar información del centro si está disponible en la respuesta
-      if (authData.containsKey('center')) {
-        final centerData = authData['center'] as Map<String, dynamic>;
-        _userCenter = app_center.Center.fromJson(centerData);
-        _centerId = _userCenter?.id;  // Usamos el ID numérico
-        debugPrint('Centro asociado: ${_userCenter?.name} (ID: $_centerId)');
-        await _authService.saveCenter(centerData);
-      }
+      // Cargar información completa del usuario y sus centros
+      await loadUserWithCenters();
 
       notifyListeners();
     } catch (e) {
@@ -78,6 +75,86 @@ class AuthProvider with ChangeNotifier {
       _userCenter = null;
       notifyListeners();
       throw _handleError(e);
+    }
+  }
+
+// Nuevo método para cargar los centros del usuario
+  Future<void> _loadUserCenter() async {
+    try {
+      final centers = await _authService.getUserCenters();
+
+      if (centers.isNotEmpty) {
+        // Tomar el primer centro de la lista (puedes implementar una selección)
+        final centerData = centers.first;
+        _userCenter = app_center.Center.fromJson(centerData);
+        _centerId = _userCenter?.id;
+        debugPrint('Centro cargado explícitamente: ${_userCenter?.name} (ID: $_centerId)');
+        debugPrint('Usuario autenticado: ${_user?.email}');
+        await _authService.saveCenter(centerData);
+      } else {
+        debugPrint('El usuario no tiene centros asignados');
+        _userCenter = null;
+        _centerId = null;
+      }
+    } catch (e) {
+      debugPrint('Error al cargar centro del usuario: $e');
+      // No hacemos fallar el login si esto falla
+    }
+  }
+
+  // Añadir este método a tu clase AuthProvider
+  Future<void> loadUserWithCenters() async {
+    if (!_isAuthenticated || _user == null) {
+      throw 'Usuario no autenticado';
+    }
+
+    try {
+      final userData = await _authService.getUserByEmail(_user!.email);
+
+      // Actualizar información del usuario si es necesario
+      _user = User(
+        email: userData['email'],
+        password: '',
+        name: userData['name'],
+        isStaff: userData['is_staff'],
+        isSuperuser: userData['is_superuser'],
+      );
+
+      // Actualizar información de los centros
+      if (userData.containsKey('centers') &&
+          userData['centers'] is List &&
+          (userData['centers'] as List).isNotEmpty) {
+
+        final centerData = userData['centers'][0]; // Tomamos el primer centro
+        _userCenter = app_center.Center.fromJson(centerData);
+        _centerId = _userCenter?.id;
+
+        debugPrint('Centro actualizado: ${_userCenter?.name} (ID: $_centerId)');
+
+        // Guardar el centro en las preferencias
+        await _authService.saveCenter(centerData);
+      } else {
+        debugPrint('El usuario no tiene centros asignados');
+        _userCenter = null;
+        _centerId = null;
+      }
+
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error al cargar información completa del usuario: $e');
+      // No hacemos fallar todo el proceso si esto falla
+    }
+  }
+
+  Future<void> refreshCenterInfo() async {
+    try {
+      if (_user != null) {
+        await loadUserWithCenters();
+      } else {
+        debugPrint('No hay usuario autenticado para refrescar el centro');
+      }
+    } catch (e) {
+      debugPrint('Error al refrescar información del centro: $e');
     }
   }
 
