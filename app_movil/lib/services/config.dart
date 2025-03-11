@@ -3,12 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AppConfig {
   // Valores por defecto - Actualizado con tu IP real
-  static String _apiIp = '10.0.0.181';
-  static String _apiPort = '8000';
+  static String _apiIp = '10.0.0.6';
+  static String _apiPort = '8080';
   static bool _isConfigLoaded = false;
-
+                                                                                                                                                        
   // URL para emuladores Android (10.0.2.2 es localhost desde el emulador)
-  static const String emulatorBaseUrl = 'http://10.0.2.2:8000';
+  static const String emulatorBaseUrl = 'http://localhost:8080';
 
   // Determinar qué URL usar
   static String getApiUrl() {

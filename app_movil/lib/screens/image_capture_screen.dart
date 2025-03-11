@@ -510,23 +510,73 @@ class ImageDetailScreen extends StatelessWidget {
             children: [
               _buildDetailRow('ID', analysisResult!.id),
               _buildDetailRow('Fecha', analysisResult!.fechaCreacion),
-              _buildDetailRow('Modelo', analysisResult!.tipoModelo),
+              _buildDetailRow('Modelo', analysisResult!.modeloUsado.isNotEmpty
+                  ? analysisResult!.modeloUsado
+                  : analysisResult!.tipoModelo),
               _buildDetailRow('Objetos detectados', analysisResult!.numeroObjetos.toString()),
               _buildDetailRow('Tiempo', '${analysisResult!.tiempoProcesamiento.toStringAsFixed(2)} s'),
+
+              if (analysisResult!.detecciones.isNotEmpty) ...[
+                const Divider(),
+                const Text('Objetos detectados:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+
+                // Lista de objetos detectados
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: analysisResult!.detecciones.length,
+                  itemBuilder: (context, index) {
+                    final detection = analysisResult!.detecciones[index];
+                    final className = detection['class'] ?? 'Desconocido';
+                    final confidence = detection['confidence'] ?? 0.0;
+                    final formattedConfidence = (confidence * 100).toStringAsFixed(1);
+
+                    // Extraer información de bbox si existe
+                    String bboxInfo = '';
+                    if (detection.containsKey('bbox')) {
+                      final bbox = detection['bbox'];
+                      bboxInfo = 'Posición: (${bbox['x1'].toStringAsFixed(0)}, '
+                          '${bbox['y1'].toStringAsFixed(0)}) - '
+                          '(${bbox['x2'].toStringAsFixed(0)}, '
+                          '${bbox['y2'].toStringAsFixed(0)})';
+                    }
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Objeto ${index + 1}: $className',
+                                style: const TextStyle(fontWeight: FontWeight.bold)),
+                            Text('Confianza: $formattedConfidence%'),
+                            if (bboxInfo.isNotEmpty) Text(bboxInfo),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+
               const Divider(),
-              const Text('Objetos detectados:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              const Text('Respuesta completa:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
+                child: SelectableText(
                   analysisResult!.resultados,
-                  style: const TextStyle(fontFamily: 'monospace'),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
               ),
             ],
@@ -541,7 +591,6 @@ class ImageDetailScreen extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildDetailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
