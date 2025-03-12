@@ -11,7 +11,8 @@ class AnalysisResult {
   final String resultados;
   final List<Map<String, dynamic>> detecciones;
   final String modeloUsado;
-  final int? centerId;  // ID del centro asociado (opcional)
+  final int? centerId;  // ID del centro asociado
+  final String? imageId;  // ID de la imagen asociada
 
   AnalysisResult({
     required this.id,
@@ -23,6 +24,7 @@ class AnalysisResult {
     this.detecciones = const [],
     this.modeloUsado = '',
     this.centerId,
+    this.imageId,
   });
 
   /// Crea una instancia desde un mapa JSON (formato guardado)
@@ -46,6 +48,11 @@ class AnalysisResult {
       }
     }
 
+    String? imageId;
+    if (map.containsKey('image_id') && map['image_id'] != null) {
+      imageId = map['image_id'].toString();
+    }
+
     return AnalysisResult(
       id: map['id'] ?? '',
       fechaCreacion: map['fechaCreacion'] ?? '',
@@ -58,6 +65,7 @@ class AnalysisResult {
       detecciones: detecList,
       modeloUsado: map['modeloUsado'] ?? '',
       centerId: parsedCenterId,
+      imageId: imageId,
     );
   }
 
@@ -106,16 +114,23 @@ class AnalysisResult {
       }
     }
 
+    // Parsear imageId si está presente
+    String? imageId;
+    if (json.containsKey('image_id') && json['image_id'] != null) {
+      imageId = json['image_id'].toString();
+    }
+
     return AnalysisResult(
-      id: json['deteccion_id']?.toString() ?? '',
-      fechaCreacion: DateTime.now().toString(),
+      id: json['id']?.toString() ?? json['deteccion_id']?.toString() ?? '',
+      fechaCreacion: json['fecha_creacion'] ?? DateTime.now().toString(),
       tipoModelo: json['tipo_modelo'] ?? modelType,
-      numeroObjetos: objCount,
+      numeroObjetos: json['numero_objetos'] ?? objCount,
       tiempoProcesamiento: json['tiempo_procesamiento']?.toDouble() ?? 0.0,
       resultados: formattedJson,
       detecciones: detecciones,
       modeloUsado: modelType,
       centerId: parsedCenterId,
+      imageId: imageId,
     );
   }
 
@@ -141,6 +156,7 @@ class AnalysisResult {
       'detecciones': detecciones,
       'modeloUsado': modeloUsado,
       'center_id': centerId,
+      'image_id': imageId,
     };
   }
 
@@ -166,6 +182,7 @@ class AnalysisResult {
     List<Map<String, dynamic>>? detecciones,
     String? modeloUsado,
     int? centerId,
+    String? imageId,
   }) {
     return AnalysisResult(
       id: id ?? this.id,
@@ -177,6 +194,7 @@ class AnalysisResult {
       detecciones: detecciones ?? this.detecciones,
       modeloUsado: modeloUsado ?? this.modeloUsado,
       centerId: centerId ?? this.centerId,
+      imageId: imageId ?? this.imageId,
     );
   }
 }

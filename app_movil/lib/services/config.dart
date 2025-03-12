@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AppConfig {
   // Valores por defecto - Actualizado con tu IP real
-  static String _apiIp = '10.0.0.6';
+  static String _apiIp = '192.168.0.9';
   static String _apiPort = '8080';
   static bool _isConfigLoaded = false;
                                                                                                                                                         

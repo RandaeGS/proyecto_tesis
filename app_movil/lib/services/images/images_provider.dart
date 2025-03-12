@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../entities/analisysresult.dart';
+import '../core/api_constants.dart';
 import '../deteccion_services/image_analisys_service.dart';
 import 'images_service.dart';
 
@@ -19,6 +20,9 @@ class ServerImageProvider with ChangeNotifier {
   // Mapa para almacenar los resultados de análisis por ID de imagen
   final Map<String, AnalysisResult> _analysisResults = {};
 
+  // Lista para almacenar todas las detecciones del centro
+  List<AnalysisResult> _centerDetections = [];
+
   // Getters
   List<ServerImage> get centerImages => _centerImages;
   bool get isLoading => _isLoading;
@@ -26,6 +30,7 @@ class ServerImageProvider with ChangeNotifier {
   int? get currentCenterId => _currentCenterId;
   Map<String, List<Map<String, dynamic>>> get imageDetections => _imageDetections;
   Map<String, AnalysisResult> get analysisResults => _analysisResults;
+  List<AnalysisResult> get centerDetections => _centerDetections;
 
   // Carga las imágenes del centro actual
   Future<void> loadCenterImages(int centerId) async {
@@ -35,11 +40,15 @@ class ServerImageProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      // Cargar imágenes del centro
       final images = await _imageService.getCenterImages(centerId);
       _centerImages = images;
 
-      // Cargar detecciones para cada imagen
+      // Cargar detecciones para cada imagen (para compatibilidad)
       await _loadDetectionsForImages();
+
+      // Cargar todas las detecciones del centro
+      await loadDetectionsByCenter(centerId);
     } catch (e) {
       _errorMessage = 'Error al cargar imágenes: $e';
       debugPrint(_errorMessage);
@@ -86,6 +95,44 @@ class ServerImageProvider with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error al cargar detecciones para imagen $imageId: $e');
+    }
+  }
+
+  // Carga todas las detecciones de un centro específico
+  Future<void> loadDetectionsByCenter(int centerId) async {
+    try {
+      final endpoint = '${ApiConstants.detectionsByCenter}?center_id=$centerId';
+      debugPrint('Solicitando detecciones por centro: $endpoint');
+
+      final data = await _imageService.getApiClient().get(
+        endpoint,
+        entityName: 'Detecciones por centro',
+      );
+
+      _centerDetections = [];
+
+      if (data is List) {
+        debugPrint('Recibidos ${data.length} resultados de detecciones');
+        for (var item in data) {
+          try {
+            final result = AnalysisResult.fromJson(item);
+
+            // Añadir esto para depuración
+            debugPrint('Detección ID: ${result.id}, Image ID: ${result.imageId}, Center ID: ${result.centerId}');
+
+            _centerDetections.add(result);
+          } catch (e) {
+            debugPrint('Error al procesar resultado de análisis: $e');
+          }
+        }
+      } else {
+        debugPrint('La respuesta no es una lista: ${data.runtimeType}');
+      }
+
+      debugPrint('Cargadas ${_centerDetections.length} detecciones para el centro $centerId');
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error al cargar detecciones por centro: $e');
     }
   }
 
@@ -169,6 +216,11 @@ class ServerImageProvider with ChangeNotifier {
       _imageDetections.remove(imageId);
       _analysisResults.remove(imageId);
 
+      // Recargar detecciones del centro si hay un centro activo
+      if (_currentCenterId != null) {
+        await loadDetectionsByCenter(_currentCenterId!);
+      }
+
       _isLoading = false;
       notifyListeners();
       return true;
@@ -183,5 +235,73 @@ class ServerImageProvider with ChangeNotifier {
   // Obtiene la URL completa de una imagen
   String getImageUrl(String filePath) {
     return _imageService.getImageUrl(filePath);
+  }
+
+  // Procesa los datos para obtener conteo de productos por categoría
+  Map<String, int> getProductCounts() {
+    // Conteo de productos por categoría
+    final Map<String, int> counts = {};
+
+    // Iterar sobre todas las detecciones del centro
+    for (var result in _centerDetections) {
+      for (var detection in result.detecciones) {
+        final String className = detection['class'] ?? 'unknown';
+        counts[className] = (counts[className] ?? 0) + 1;
+      }
+    }
+
+    return counts;
+  }
+
+  // Obtiene las categorías de productos únicas
+  List<String> getProductCategories() {
+    final Set<String> categories = {};
+
+    // Iterar sobre todas las detecciones del centro
+    for (var result in _centerDetections) {
+      for (var detection in result.detecciones) {
+        final String className = detection['class'] ?? 'unknown';
+        categories.add(className);
+      }
+    }
+
+    final categoriesList = categories.toList()..sort();
+    return categoriesList;
+  }
+
+// Obtiene las imágenes que contienen una categoría específica
+  List<ServerImage> getImagesForCategory(String category) {
+    // Lista de IDs de imágenes que contienen esta categoría
+    final Set<String> imageIds = {};
+
+    // Recorrer todas las detecciones para encontrar aquellas que contienen la categoría
+    for (var detection in _centerDetections) {
+      // Verificar si esta detección contiene la categoría
+      bool hasCategory = detection.detecciones.any((item) =>
+      (item['class'] ?? 'unknown') == category
+      );
+
+      // Si la detección contiene la categoría y tiene un image_id
+      if (hasCategory && detection.imageId != null) {
+        imageIds.add(detection.imageId!);
+        debugPrint('Detección ${detection.id} con categoría $category está asociada a imagen ${detection.imageId}');
+      }
+    }
+
+    // Filtrar las imágenes por los IDs encontrados
+    final List<ServerImage> imagesWithCategory = _centerImages
+        .where((image) => imageIds.contains(image.id))
+        .toList();
+
+    // Log para depuración
+    debugPrint('Se encontraron ${imagesWithCategory.length} imágenes para la categoría $category');
+
+    // Si no se encontraron imágenes, devolver todas las del centro como fallback
+    if (imagesWithCategory.isEmpty) {
+      debugPrint('No se encontraron imágenes específicas para $category, mostrando todas las del centro');
+      return _centerImages;
+    }
+
+    return imagesWithCategory;
   }
 }

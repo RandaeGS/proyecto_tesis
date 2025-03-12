@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:path/path.dart' as path;
 
+
 import '../../../screens/image_capture_screen.dart';
 import '../../services/images/images_provider.dart';
 import '../../services/images/images_service.dart';
@@ -36,40 +37,24 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
     setState(() => _isLoading = true);
 
     try {
-      // Cargar imágenes y detecciones del centro
+      // Cargar imágenes y detecciones del centro a través del provider
       final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
       await imageProvider.loadCenterImages(widget.centerId);
 
-      // Procesar datos de productos
-      _processProductData(imageProvider);
+      // Obtener conteos de productos directamente del provider
+      _productCounts = imageProvider.getProductCounts();
+      _productCategories = imageProvider.getProductCategories();
 
       // Inicializar el controlador de pestañas
-      _tabController = TabController(length: _productCategories.length + 1, vsync: this);
+      _tabController = TabController(
+          length: _productCategories.length + 1,
+          vsync: this
+      );
     } catch (e) {
       setState(() => _errorMessage = e.toString());
     } finally {
       setState(() => _isLoading = false);
     }
-  }
-
-  void _processProductData(ServerImageProvider imageProvider) {
-    // Conteo de productos por categoría
-    final Map<String, int> counts = {};
-    final Set<String> categories = {};
-
-    // Iterar sobre los resultados de análisis para contar objetos por categoría
-    imageProvider.analysisResults.forEach((imageId, result) {
-      for (var detection in result.detecciones) {
-        final String className = detection['class'] ?? 'unknown';
-        counts[className] = (counts[className] ?? 0) + 1;
-        categories.add(className);
-      }
-    });
-
-    setState(() {
-      _productCounts = counts;
-      _productCategories = categories.toList()..sort();
-    });
   }
 
   @override
@@ -259,27 +244,23 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
   Widget _buildCategoryTab(String category) {
     return Consumer<ServerImageProvider>(
       builder: (context, imageProvider, _) {
-        // Filtrar imágenes que tienen detecciones de esta categoría
-        final imagesWithCategory = imageProvider.centerImages
-            .where((image) {
-          final result = imageProvider.analysisResults[image.id];
-          if (result == null) return false;
+        // Obtener detecciones que contienen esta categoría
+        final detections = imageProvider.centerDetections.where((result) {
+          return result.detecciones.any((detection) =>
+          (detection['class'] ?? 'unknown') == category
+          );
+        }).toList();
 
-          return result.detecciones
-              .any((detection) => detection['class'] == category);
-        })
-            .toList();
-
-        // Contar el total de instancias de esta categoría
-        int totalInstances = 0;
-        for (var imageId in imageProvider.analysisResults.keys) {
-          final result = imageProvider.analysisResults[imageId];
-          if (result != null) {
-            totalInstances += result.detecciones
-                .where((detection) => detection['class'] == category)
-                .length;
-          }
+        // Contar instancias de esta categoría
+        int instanceCount = 0;
+        for (var result in detections) {
+          instanceCount += result.detecciones.where((detection) =>
+          (detection['class'] ?? 'unknown') == category
+          ).length;
         }
+
+        // Mostrar imágenes que contienen esta categoría
+        final List<ServerImage> imagesWithCategory = imageProvider.getImagesForCategory(category);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -309,7 +290,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
                         ),
                       ),
                       Text(
-                        '$totalInstances productos en ${imagesWithCategory.length} imágenes',
+                        '$instanceCount productos en ${imagesWithCategory.length} imágenes',
                         style: TextStyle(color: Colors.grey.shade700),
                       ),
                     ],
@@ -335,16 +316,17 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
                 itemCount: imagesWithCategory.length,
                 itemBuilder: (context, index) {
                   final image = imagesWithCategory[index];
+
+                  // Encontrar el resultado de análisis para esta imagen
                   final analysisResult = imageProvider.analysisResults[image.id];
 
-                  if (analysisResult == null) {
-                    return const SizedBox.shrink();
-                  }
-
                   // Contar cuántas instancias de esta categoría hay en la imagen
-                  final instanceCount = analysisResult.detecciones
-                      .where((detection) => detection['class'] == category)
-                      .length;
+                  int imageInstanceCount = 0;
+                  if (analysisResult != null) {
+                    imageInstanceCount = analysisResult.detecciones.where((detection) =>
+                    (detection['class'] ?? 'unknown') == category
+                    ).length;
+                  }
 
                   return Card(
                     clipBehavior: Clip.antiAlias,
@@ -373,7 +355,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
                               fit: StackFit.expand,
                               children: [
                                 CachedNetworkImage(
-                                  imageUrl: ImageService().getImageUrl(image.file),
+                                  imageUrl: imageProvider.getImageUrl(image.file),
                                   fit: BoxFit.cover,
                                   placeholder: (context, url) => Container(
                                     color: Colors.grey.shade200,
@@ -402,7 +384,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Text(
-                                      '$instanceCount',
+                                      '$imageInstanceCount',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.bold,

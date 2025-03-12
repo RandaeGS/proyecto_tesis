@@ -41,6 +41,11 @@ class ServerImage {
 class ImageService {
   final ApiClient _apiClient = ApiClient();
 
+  // Método para acceder al ApiClient (necesario para el ServerImageProvider)
+  ApiClient getApiClient() {
+    return _apiClient;
+  }
+
   /// Obtiene todas las imágenes de un centro específico
   Future<List<ServerImage>> getCenterImages(int centerId) async {
     try {

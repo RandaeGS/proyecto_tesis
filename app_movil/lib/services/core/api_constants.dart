@@ -23,6 +23,7 @@ class ApiConstants {
 
   // Endpoints de detecciones
   static const String analyzeImage = '/api/detecciones/analizar/';
+  static const String detectionsByCenter = '/api/detecciones/by-center/'; // Añadido endpoint para detecciones por centro
 
   // Valores para SharedPreferences
   static const String userKey = 'user_data';
