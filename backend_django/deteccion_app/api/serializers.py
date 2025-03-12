@@ -6,13 +6,15 @@ class DeteccionSerializer(serializers.ModelSerializer):
     """Serializador para el modelo de Detección"""
 
     resultados = serializers.SerializerMethodField()
+    center_id = serializers.IntegerField(source='center.id', read_only=True, allow_null=True)
+    image_id = serializers.IntegerField(source='image.id', read_only=True, allow_null=True)
 
     class Meta:
         model = Deteccion
         fields = ['id', 'fecha_creacion', 'tipo_modelo', 'numero_objetos',
-                  'tiempo_procesamiento', 'resultados']
+                  'tiempo_procesamiento', 'resultados', 'center_id', 'image_id']
         read_only_fields = ['id', 'fecha_creacion', 'numero_objetos',
-                            'tiempo_procesamiento', 'resultados']
+                            'tiempo_procesamiento', 'resultados', 'center_id', 'image_id']
 
     def get_resultados(self, obj):
         """Obtiene los resultados como diccionario"""

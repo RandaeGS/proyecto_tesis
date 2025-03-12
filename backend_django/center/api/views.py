@@ -7,7 +7,6 @@ from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from backend_django.users.api.serializers import UserSerializer
-from django.contrib.auth.models import User
 from center.api.serializer import CenterRegistrationSerializer, CenterSerializer
 from center.models import Center
 

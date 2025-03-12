@@ -1,13 +1,19 @@
 from django.db import models
 import uuid
 import json
-
+from center.models import Center
+from uploads.models import Image
 
 class Deteccion(models.Model):
     """Modelo para almacenar los resultados de las detecciones"""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    center = models.ForeignKey(Center, on_delete=models.CASCADE, related_name='detecciones', null=True)
+    image = models.ForeignKey(Image, on_delete=models.SET_NULL, related_name='detecciones', null=True)
+
+
 
     # Tipo de modelo utilizado
     TIPO_MODELO_CHOICES = [

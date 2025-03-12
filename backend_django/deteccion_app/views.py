@@ -70,15 +70,43 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
             resultados = modelo_service.process_image(imagen_pil)
             tiempo_procesamiento = time.time() - start_time
 
+            # Obtener el centro antes de crear la detección
+            # Importar modelos necesarios
+            from uploads.models import Image as ImageModel
+            from center.models import Center
+            from django.utils import timezone
+
+            # Verificar si hay centros disponibles
+            center_instance = None
+            center_count = Center.objects.count()
+            logger.info(f"Número de centros disponibles: {center_count}")
+
+            if center_id:
+                try:
+                    center_instance = Center.objects.get(id=center_id)
+                    logger.info(f"Centro encontrado con ID: {center_id}")
+                except Center.DoesNotExist:
+                    logger.warning(f"Centro con ID {center_id} no encontrado")
+
+            # Si no hay centro específico, buscar uno existente o crear uno nuevo
+            if not center_instance:
+                center_instance = Center.objects.first()
+
+                # Si no hay centros, crear uno por defecto
+                if not center_instance:
+                    logger.info("Creando nuevo centro por defecto")
+                    center_instance = Center.objects.create(
+                        name="Centro de Acopio Automático",
+                        address="Dirección por defecto"
+                    )
+                    logger.info(f"Centro creado automáticamente con ID: {center_instance.id}")
+
             # Crear registro en la base de datos Deteccion
             deteccion = Deteccion(
                 tipo_modelo=tipo_modelo,
-                tiempo_procesamiento=tiempo_procesamiento
+                tiempo_procesamiento=tiempo_procesamiento,
+                center=center_instance  # Ahora center_instance ya está definido
             )
-
-            # # Guardar la imagen en Deteccion si se solicita
-            # if guardar_imagen:
-            #     deteccion.imagen = imagen_file
 
             # Guardar los resultados en Deteccion
             deteccion.set_resultados(resultados)
@@ -90,38 +118,6 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
             # Guardar también en el modelo Image si se solicita
             if guardar_imagen:
                 try:
-                    # Importar explícitamente el modelo Image desde center.models
-                    from uploads.models import Image as ImageModel
-                    from center.models import Center
-                    from django.utils import timezone
-
-                    logger.info("Intentando guardar en modelo Image")
-
-                    # Verificar si hay centros disponibles
-                    center_instance = None
-                    center_count = Center.objects.count()
-                    logger.info(f"Número de centros disponibles: {center_count}")
-
-                    if center_id:
-                        try:
-                            center_instance = Center.objects.get(id=center_id)
-                            logger.info(f"Centro encontrado con ID: {center_id}")
-                        except Center.DoesNotExist:
-                            logger.warning(f"Centro con ID {center_id} no encontrado")
-
-                    # Si no hay centro específico, buscar uno existente o crear uno nuevo
-                    if not center_instance:
-                        center_instance = Center.objects.first()
-
-                        # Si no hay centros, crear uno por defecto
-                        if not center_instance:
-                            logger.info("Creando nuevo centro por defecto")
-                            center_instance = Center.objects.create(
-                                name="Centro de Acopio Automático",
-                                address="Dirección por defecto"
-                            )
-                            logger.info(f"Centro creado automáticamente con ID: {center_instance.id}")
-
                     # Si no se proporciona metadata, usar los resultados de la detección
                     if not metadata:
                         metadata = resultados
@@ -140,6 +136,10 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
                     # Guardar la imagen
                     imagen_guardada.save()
                     logger.info(f"Imagen guardada exitosamente en modelo Image con ID: {imagen_guardada.id}")
+
+                    # Actualizar la referencia a la imagen en la detección
+                    deteccion.image = imagen_guardada
+                    deteccion.save(update_fields=['image'])
 
                 except Exception as img_error:
                     logger.error(f"Error al guardar en el modelo Image: {str(img_error)}", exc_info=True)
@@ -195,5 +195,30 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
             logger.error(f"Error al obtener información del modelo: {str(e)}", exc_info=True)
             return Response(
                 {'error': f'Error al obtener información del modelo: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'], url_path='by-center')
+    def detecciones_by_center(self, request):
+        """
+        Obtiene las detecciones de un centro específico
+        """
+        center_id = request.query_params.get('center_id')
+
+        if not center_id:
+            return Response(
+                {'error': 'Debe proporcionar un center_id'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Filtrar detecciones por centro directamente
+            detecciones = Deteccion.objects.filter(center_id=center_id)
+            serializer = self.get_serializer(detecciones, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Error al obtener detecciones por centro: {str(e)}", exc_info=True)
+            return Response(
+                {'error': f'Error al obtener detecciones: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
