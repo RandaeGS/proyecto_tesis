@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../entities/analisysresult.dart';
-import '../detections/image_analisys_service.dart';
+import 'image_analisys_service.dart';
 
 
 /// Provider para manejar operaciones y estado de análisis de imágenes

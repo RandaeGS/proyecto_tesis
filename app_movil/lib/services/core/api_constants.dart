@@ -16,6 +16,11 @@ class ApiConstants {
   static const String createUser = '/users/api/users/create/';
   static const String assignUserToCenter = '/api/users/'; // + userId + '/assign-center/'
 
+  // Endpoints de imágenes
+  static const String images = '/api/images/';
+  static const String uploadImage = '/api/images/';
+  static const String imageDetections = '/api/images/'; // + imageId + '/detecciones/'
+
   // Endpoints de detecciones
   static const String analyzeImage = '/api/detecciones/analizar/';
 

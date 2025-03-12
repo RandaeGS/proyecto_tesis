@@ -1,13 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:path/path.dart' as path;
 
 import '../entities/analisysresult.dart';
 import '../services/auth_services/auth_provider.dart';
 import '../services/deteccion_services/analysis_provider.dart';
+import '../services/images/images_provider.dart';
+import '../services/images/images_service.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({Key? key}) : super(key: key);
@@ -18,169 +20,45 @@ class ImageCaptureScreen extends StatefulWidget {
 
 class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   final ImagePicker _picker = ImagePicker();
-  List<File> _capturedImages = [];
   bool _isLoading = false;
+  String _errorMessage = '';
+  int? _centerId;
 
   @override
   void initState() {
     super.initState();
-    _loadSavedImages();
-    _loadAnalysisResults();
+    _initialize();
   }
 
-  // Cargar análisis guardados
-  Future<void> _loadAnalysisResults() async {
-    try {
-      await Provider.of<AnalysisProvider>(context, listen: false).loadAnalysisResults();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al cargar análisis guardados: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _loadSavedImages() async {
-    setState(() {
-      _isLoading = true;
-    });
+  Future<void> _initialize() async {
+    setState(() => _isLoading = true);
 
     try {
-      final directory = await getApplicationDocumentsDirectory();
-      final imageDir = Directory('${directory.path}/captured_images');
+      // Obtener el ID del centro del usuario actual
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      _centerId = authProvider.centerId;
 
-      if (await imageDir.exists()) {
-        final files = await imageDir.list().toList();
-        final imageFiles = files
-            .whereType<File>()
-            .where((file) =>
-            ['.jpg', '.jpeg', '.png'].contains(path.extension(file.path).toLowerCase()))
-            .toList();
-
-        setState(() {
-          _capturedImages = imageFiles;
-        });
-      } else {
-        // Crear el directorio si no existe
-        await imageDir.create(recursive: true);
+      if (_centerId == null) {
+        throw Exception('No tiene un centro asignado');
       }
+
+      // Cargar imágenes del centro
+      await Provider.of<ServerImageProvider>(context, listen: false)
+          .loadCenterImages(_centerId!);
     } catch (e) {
+      setState(() => _errorMessage = e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error al cargar imágenes: $e'),
+          content: Text('Error: $e'),
           backgroundColor: Colors.red,
         ),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _captureImage(ImageSource source) async {
-    try {
-      final XFile? photo = await _picker.pickImage(
-        source: source,
-        imageQuality: 80,
-      );
-
-      if (photo != null) {
-        // Guardar la imagen en el directorio de la aplicación
-        final directory = await getApplicationDocumentsDirectory();
-        final imageDir = Directory('${directory.path}/captured_images');
-
-        if (!await imageDir.exists()) {
-          await imageDir.create(recursive: true);
-        }
-
-        final filename = 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final savedImage = File('${imageDir.path}/$filename');
-
-        await savedImage.writeAsBytes(await photo.readAsBytes());
-
-        // Actualizar la UI con la nueva imagen
-        setState(() {
-          _capturedImages.add(savedImage);
-          _isLoading = true; // Activar indicador de carga
-        });
-
-        // Obtener el ID del centro actual
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        final centerId = authProvider.centerId;
-
-        // Analizar la imagen
-        try {
-          final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
-          final result = await analysisProvider.analyzeImage(
-            savedImage,
-            centerId: centerId,
-          );
-
-          setState(() {
-            _isLoading = false;
-          });
-
-          // Mostrar el resultado del análisis
-          if (mounted && result != null) {
-            _showAnalysisResults(result);
-          }
-        } catch (e) {
-          setState(() {
-            _isLoading = false;
-          });
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Error al analizar imagen: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al capturar imagen: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _deleteImage(File image) async {
-    try {
-      await image.delete();
-
-      // También eliminar del almacenamiento
-      await Provider.of<AnalysisProvider>(context, listen: false).removeAnalysisResult(image.path);
-
-      setState(() {
-        _capturedImages.remove(image);
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Imagen eliminada correctamente'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al eliminar imagen: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
+  // Muestra el resultado del análisis
   void _showAnalysisResults(AnalysisResult result) {
     showDialog(
       context: context,
@@ -230,6 +108,61 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     );
   }
 
+  // Captura una nueva imagen
+  Future<void> _captureImage(ImageSource source) async {
+    if (_centerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No tiene un centro asignado'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: source,
+        imageQuality: 80,
+      );
+
+      if (photo != null) {
+        setState(() => _isLoading = true);
+
+        // Obtener el modelo de detección seleccionado
+        final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
+        final modelType = analysisProvider.selectedModel;
+
+        // Subir y analizar la imagen
+        final file = File(photo.path);
+        final result = await analysisProvider.analyzeImage(
+          file,
+          centerId: _centerId,
+        );
+
+        // Recargar imágenes del centro después de analizar
+        await Provider.of<ServerImageProvider>(context, listen: false)
+            .loadCenterImages(_centerId!);
+
+        setState(() => _isLoading = false);
+
+        // Mostrar los resultados
+        if (mounted && result != null) {
+          _showAnalysisResults(result);
+        }
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Muestra opciones para capturar imagen
   void _showImageOptions() {
     final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
 
@@ -309,19 +242,41 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     );
   }
 
-  void _viewImage(File image) {
-    final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
-    final analysisResult = analysisProvider.analysisResults[image.path];
-
+  // Ver detalles de una imagen
+  void _viewImage(ServerImage image, AnalysisResult? analysisResult) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ImageDetailScreen(
+        builder: (context) => ServerImageDetailScreen(
           image: image,
           analysisResult: analysisResult,
         ),
       ),
     );
+  }
+
+  // Eliminar una imagen
+  Future<void> _deleteImage(ServerImage image) async {
+    try {
+      final success = await Provider.of<ServerImageProvider>(context, listen: false)
+          .deleteImage(image.id);
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Imagen eliminada correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al eliminar imagen: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -331,17 +286,76 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         title: const Text('Imágenes y Análisis'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _isLoading ? null : _initialize,
+            tooltip: 'Recargar imágenes',
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showImageOptions,
+        onPressed: _isLoading ? null : _showImageOptions,
         backgroundColor: Colors.blue,
         child: const Icon(Icons.camera_alt, color: Colors.white),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _capturedImages.isEmpty
-          ? _buildEmptyState()
-          : _buildImageGrid(),
+          : _errorMessage.isNotEmpty
+          ? _buildErrorState()
+          : Consumer<ServerImageProvider>(
+        builder: (context, imageProvider, _) {
+          if (imageProvider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (imageProvider.centerImages.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          return _buildImageGrid(imageProvider);
+        },
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.red.shade400,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Error al cargar imágenes',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              _errorMessage,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _initialize,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Reintentar'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -357,7 +371,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'No hay imágenes capturadas',
+            'No hay imágenes en este centro',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -377,119 +391,127 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     );
   }
 
-  Widget _buildImageGrid() {
-    final analysisProvider = Provider.of<AnalysisProvider>(context);
+  Widget _buildImageGrid(ServerImageProvider imageProvider) {
+    final imageService = ImageService();
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.75,
-      ),
-      itemCount: _capturedImages.length,
-      itemBuilder: (context, index) {
-        final image = _capturedImages[index];
-        final hasAnalysis = analysisProvider.analysisResults.containsKey(image.path);
+    return RefreshIndicator(
+      onRefresh: _initialize,
+      child: GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.75,
+        ),
+        itemCount: imageProvider.centerImages.length,
+        itemBuilder: (context, index) {
+          final image = imageProvider.centerImages[index];
+          final hasAnalysis = imageProvider.analysisResults.containsKey(image.id);
+          final analysisResult = imageProvider.analysisResults[image.id];
 
-        return _buildImageCard(image, hasAnalysis);
-      },
-    );
-  }
-
-  Widget _buildImageCard(File image, bool hasAnalysis) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: () => _viewImage(image),
-        borderRadius: BorderRadius.circular(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                    child: Image.file(
-                      image,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  if (hasAnalysis)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.check_circle,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+          return Card(
+            elevation: 3,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
             ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: InkWell(
+              onTap: () => _viewImage(image, analysisResult),
+              borderRadius: BorderRadius.circular(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Stack(
+                      fit: StackFit.expand,
                       children: [
-                        Text(
-                          path.basename(image.path),
-                          style: const TextStyle(fontSize: 12),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (hasAnalysis) ...[
-                          const SizedBox(height: 2),
-                          Consumer<AnalysisProvider>(
-                            builder: (context, provider, _) {
-                              final result = provider.analysisResults[image.path];
-                              return Text(
-                                'Objetos: ${result?.numeroObjetos ?? 0}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade700,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              );
-                            },
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                          child: CachedNetworkImage(
+                            imageUrl: imageService.getImageUrl(image.file),
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(
+                                Icons.error,
+                                color: Colors.red,
+                              ),
+                            ),
                           ),
-                        ],
+                        ),
+                        if (image.processed || hasAnalysis)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.check_circle,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                    onPressed: () => _showDeleteConfirmation(image),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                path.basename(image.file),
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (hasAnalysis && analysisResult != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Objetos: ${analysisResult.numeroObjetos}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade700,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                          onPressed: () => _showDeleteConfirmation(image),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  Future<void> _showDeleteConfirmation(File image) async {
+  Future<void> _showDeleteConfirmation(ServerImage image) async {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -521,11 +543,12 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   }
 }
 
-class ImageDetailScreen extends StatelessWidget {
-  final File image;
+class ServerImageDetailScreen extends StatelessWidget {
+  final ServerImage image;
   final AnalysisResult? analysisResult;
+  final ImageService _imageService = ImageService();
 
-  const ImageDetailScreen({
+  ServerImageDetailScreen({
     Key? key,
     required this.image,
     this.analysisResult,
@@ -647,7 +670,7 @@ class ImageDetailScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(path.basename(image.path)),
+        title: Text(path.basename(image.file)),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -668,9 +691,30 @@ class ImageDetailScreen extends StatelessWidget {
               boundaryMargin: const EdgeInsets.all(20),
               minScale: 0.5,
               maxScale: 4,
-              child: Image.file(
-                image,
+              child: CachedNetworkImage(
+                imageUrl: _imageService.getImageUrl(image.file),
                 fit: BoxFit.contain,
+                placeholder: (context, url) => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                errorWidget: (context, url, error) => Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.error,
+                        color: Colors.red,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error al cargar la imagen: $error',
+                        style: const TextStyle(color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

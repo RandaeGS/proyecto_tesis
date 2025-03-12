@@ -1,5 +1,6 @@
 import 'package:app_movil/services/auth_services/auth_provider.dart';
 import 'package:app_movil/services/deteccion_services/analysis_provider.dart';
+import 'package:app_movil/services/images/images_provider.dart';
 import 'package:app_movil/services/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -25,6 +26,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => AnalysisProvider()),
+        ChangeNotifierProvider(create: (_) => ServerImageProvider()),
       ],
       child: const MyApp(),
     ),

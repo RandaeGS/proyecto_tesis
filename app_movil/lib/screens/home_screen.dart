@@ -1,9 +1,9 @@
+import 'package:app_movil/screens/product_managment/product_screen_managment.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/auth_services/auth_provider.dart';
-import '../services/detections/image_analisys_service.dart';
-import '../services/detections/product_managment/product_screen_managment.dart';
+import '../services/deteccion_services/image_analisys_service.dart';
 import '../services/user_provider.dart';
 import 'image_capture_screen.dart';
 import 'user_management/user_list_screen.dart';
@@ -282,58 +282,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Obtener el ID del centro del usuario
                   final int currentCenterId = authProvider.centerId!;
 
-                  // Mostrar indicador de carga
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (context) => const AlertDialog(
-                      content: Row(
-                        children: [
-                          CircularProgressIndicator(),
-                          SizedBox(width: 20),
-                          Text("Cargando productos..."),
-                        ],
+                  // Navegar a la pantalla de gestión
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProductManagementScreen(
+                        centerId: currentCenterId,
                       ),
                     ),
                   );
-
-                  // Obtener resultados de análisis
-                  final analysisService = ImageAnalysisService();
-                  analysisService.getAnalysisResultsByCenter(currentCenterId).then((resultsMap) {
-                    // Cerrar diálogo de carga
-                    Navigator.pop(context);
-
-                    if (resultsMap.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('No hay productos detectados para el centro ${authProvider.userCenter?.name ?? "actual"}'),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
-                      return;
-                    }
-
-                    // Navegar a la pantalla de gestión
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProductManagementScreen(
-                          analysisResults: resultsMap,
-                          centerId: currentCenterId,
-                        ),
-                      ),
-                    );
-                  }).catchError((error) {
-                    // Cerrar diálogo en caso de error
-                    Navigator.pop(context);
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error al cargar datos: $error'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  });
                 },
               ),
 
