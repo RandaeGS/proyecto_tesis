@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script para clonar con Git LFS y ejecutar el backend de Django
+# Script para clonar con Git LFS, ejecutar el backend de Django y configurar Nginx como proxy inverso
 
 # Instalar Git LFS
 sudo apt-get update
@@ -48,3 +48,32 @@ sudo docker compose -f docker-compose.local.yml exec -T django apt-get install -
 # Ejecutar migraciones y recolectar estáticos
 sudo docker compose -f docker-compose.local.yml exec -T django python manage.py migrate
 sudo docker compose -f docker-compose.local.yml exec -T django python manage.py collectstatic --noinput
+
+# ========================================================
+# 🔹 CONFIGURACIÓN DE NGINX COMO PROXY INVERSO
+# ========================================================
+
+# Instalar Nginx si no está instalado
+sudo apt-get install -y nginx
+
+# Crear configuración de Nginx para Django
+NGINX_CONF="/etc/nginx/sites-available/django_proxy"
+
+echo "server {
+    listen 80;
+    server_name appdjango.friaslunaa.ninja;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+}" | sudo tee $NGINX_CONF > /dev/null
+
+# Enlazar la configuración y reiniciar Nginx
+sudo ln -sf /etc/nginx/sites-available/django_proxy /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl restart nginx
+
+echo "✅ Nginx configurado correctamente. Ahora puedes acceder a tu aplicación en http://appdjango.friaslunaa.ninja sin necesidad del puerto 8000."
+
