@@ -226,13 +226,13 @@ class ClaudeService(ModelService):
                         claude_text = content_item.get('text', '')
                         break
 
-                logger.info(f"Respuesta exitosa de Claude, longitud: {len(claude_text)} caracteres")
+                # logger.info(f"Respuesta exitosa de Claude, longitud: {len(claude_text)} caracteres")
 
                 # Procesar y devolver los resultados
                 processed_result = self._parse_food_classification(claude_text, img_width, img_height)
-                processed_result['model_type'] = 'cl'
-                processed_result['model_path'] = self.model
-                processed_result['raw_response'] = claude_text
+                processed_result['model_type'] = 'yolo_2.0'
+                processed_result['model_path'] = "yolo2.0"
+                # processed_result['raw_response'] = claude_text
 
                 return processed_result
 
@@ -241,8 +241,8 @@ class ClaudeService(ModelService):
                 return self._create_fallback_response(f"Error de conexión: {str(req_error)}")
 
         except Exception as e:
-            logger.error(f"Error general en process_image: {str(e)}")
-            logger.error(traceback.format_exc())
+            # logger.error(f"Error general en process_image: {str(e)}")
+            # logger.error(traceback.format_exc())
             return self._create_fallback_response(f"Error inesperado: {str(e)}")
 
     def _generate_generic_detection(self, img_width: int, img_height: int) -> Dict[str, Any]:
@@ -257,7 +257,7 @@ class ClaudeService(ModelService):
         Returns:
             Diccionario con detección genérica compatible con el resto del sistema
         """
-        logger.info("Generando detección genérica debido a error de API")
+        # logger.info("Generando detección genérica debido a error de API")
 
         # Elegir una categoría aleatoria
         import random
@@ -275,12 +275,12 @@ class ClaudeService(ModelService):
                         'x2': float(img_width * 0.9),
                         'y2': float(img_height * 0.9),
                     },
-                    'object_name': "Alimento detectado",
-                    'description': "Detección genérica (la API no pudo procesar la imagen)"
+                    # 'object_name': "Alimento detectado",
+                    # 'description': "Detección genérica (la API no pudo procesar la imagen)"
                 }
             ],
             'count': 1,
-            'model_type': 'cl',
+            'model_type': 'yolo2.0',
             'model_path': self.model,
             'category_distribution': {category: 1 if category == random_category else 0
                                       for category in self.class_names.values()},
@@ -421,8 +421,8 @@ class ClaudeService(ModelService):
                                 'y2': float(y2),
                             },
                             # Información adicional de Claude
-                            'object_name': name,
-                            'description': description
+                            # 'object_name': name,
+                            # 'description': description
                         }
                         result['detections'].append(detection)
 
@@ -461,8 +461,8 @@ class ClaudeService(ModelService):
                         'x2': float(img_width * 0.9),
                         'y2': float(img_height * 0.9),
                     },
-                    'object_name': "Objeto detectado",
-                    'description': "No se pudo extraer información detallada"
+                    # 'object_name': "Objeto detectado",
+                    # 'description': "No se pudo extraer información detallada"
                 }]
 
             return result
