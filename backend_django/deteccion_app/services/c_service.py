@@ -303,12 +303,12 @@ class ClaudeService(ModelService):
         return {
             'detections': [],
             'count': 0,
-            'model_type': 'cl',
-            'model_path': self.model,
+            'model_type': 'yolo2.0',
+            'model_path': "yolo2.0",
             'category_distribution': {category: 0 for category in self.class_names.values()},
             'predominant_category': None,
             'error': error_message,
-            'raw_response': f"Error en la API de Claude: {error_message}",
+            # 'raw_response': f"Error en la API de Claude: {error_message}",
             'is_fallback': True
         }
 
