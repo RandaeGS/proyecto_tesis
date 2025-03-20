@@ -194,7 +194,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
               value: analysisProvider.selectedModel,
               items: const [
                 DropdownMenuItem(value: 'yolo', child: Text('YOLO')),
-                DropdownMenuItem(value: 'mask_rcnn', child: Text('Mask R-CNN')),
+                DropdownMenuItem(value: 'cl', child: Text('YOLO_2.0')),
                 DropdownMenuItem(value: 'ssd', child: Text('SSD')),
               ],
               onChanged: (value) {

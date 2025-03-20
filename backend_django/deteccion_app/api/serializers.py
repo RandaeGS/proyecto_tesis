@@ -28,7 +28,7 @@ class ImagenUploadSerializer(serializers.Serializer):
     tipo_modelo = serializers.ChoiceField(
         choices=[
             ('yolo', 'YOLO'),
-            ('claude', 'Claude API'),
+            ('cl', 'Yolo_2.0'),
             ('roboflow', 'Roboflow API')
         ]
     )

@@ -122,8 +122,9 @@ MODEL_SETTINGS = {
 }
 
 # Configuraciones para la API de Claude (reemplaza con tus credenciales)
-CE_API_KEY = os.environ.get('CE_API_KEY', '')
+CE_API_KEY = os.environ.get("API_CL")
 CE_API_URL = 'https://api.anthropic.com/v1/messages'
+
 
 # Configuración de Roboflow API
 ROBOFLOW_API_KEY = os.environ.get('rf_pWyR7PvkW0YL2djEdCerpYyeSdS2', '')

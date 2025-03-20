@@ -18,7 +18,7 @@ class Deteccion(models.Model):
     # Tipo de modelo utilizado
     TIPO_MODELO_CHOICES = [
         ('yolo', 'YOLO'),
-        ('claude', 'Claude API'),
+        ('cl', 'YOLO 2.0'),
     ]
     tipo_modelo = models.CharField(max_length=20, choices=TIPO_MODELO_CHOICES)
 
@@ -37,9 +37,12 @@ class Deteccion(models.Model):
         self.resultados_json = json.dumps(resultados_dict)
         self.numero_objetos = len(resultados_dict.get('detections', []))
 
+
     def get_resultados(self):
         """Obtiene los resultados como diccionario"""
         return json.loads(self.resultados_json)
+
+
 
     class Meta:
         verbose_name = "Detección"

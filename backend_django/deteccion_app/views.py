@@ -53,7 +53,7 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
         # Seleccionar el servicio de modelo apropiado
         if tipo_modelo == 'yolo':
             modelo_service = YOLOService()
-        elif tipo_modelo == 'claude':
+        elif tipo_modelo == 'cl':
             modelo_service = ClaudeService()
         elif tipo_modelo == 'roboflow':
             modelo_service = RoboflowService()
@@ -178,7 +178,7 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             if tipo_modelo == 'yolo':
                 modelo_service = YOLOService()
-            elif tipo_modelo == 'claude':
+            elif tipo_modelo == 'cl':
                 modelo_service = ClaudeService()
             else:
                 return Response(
