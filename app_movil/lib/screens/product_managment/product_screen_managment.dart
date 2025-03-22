@@ -4,9 +4,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:path/path.dart' as path;
 
 
-import '../../../screens/image_capture_screen.dart';
 import '../../services/images/images_provider.dart';
 import '../../services/images/images_service.dart';
+import '../images/server_screen_managment.dart';
 
 class ProductManagementScreen extends StatefulWidget {
   final int centerId;
