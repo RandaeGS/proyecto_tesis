@@ -1,135 +1,58 @@
+import 'dart:convert';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
+import 'dart:developer' as developer;
 
 import '../../entities/analisysresult.dart';
 import '../../services/images/images_service.dart';
+import '../../utils/show_analisys_results.dart';
 
 class ServerImageDetailScreen extends StatelessWidget {
   final ServerImage image;
   final AnalysisResult? analysisResult;
   final ImageService _imageService = ImageService();
 
+
   ServerImageDetailScreen({
-    Key? key,
+    super.key,
     required this.image,
     this.analysisResult,
-  }) : super(key: key);
+  }) {
+    // Registrar información sobre el análisis para depuración
 
-  void _showAnalysisDetails(BuildContext context) {
-    if (analysisResult == null) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Detalles del análisis'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDetailRow('ID', analysisResult!.id),
-              _buildDetailRow('Fecha', analysisResult!.fechaCreacion),
-              _buildDetailRow('Modelo', analysisResult!.modeloUsado.isNotEmpty
-                  ? analysisResult!.modeloUsado
-                  : analysisResult!.tipoModelo),
-              _buildDetailRow('Objetos detectados', analysisResult!.numeroObjetos.toString()),
-              _buildDetailRow('Tiempo', '${analysisResult!.tiempoProcesamiento.toStringAsFixed(2)} s'),
-
-              if (analysisResult!.detecciones.isNotEmpty) ...[
-                const Divider(),
-                const Text('Objetos detectados:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-
-                // Lista de objetos detectados
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: analysisResult!.detecciones.length,
-                  itemBuilder: (context, index) {
-                    final detection = analysisResult!.detecciones[index];
-                    final className = detection['class'] ?? 'Desconocido';
-                    final confidence = detection['confidence'] ?? 0.0;
-                    final formattedConfidence = (confidence * 100).toStringAsFixed(1);
-
-                    // Extraer información de bbox si existe
-                    String bboxInfo = '';
-                    if (detection.containsKey('bbox')) {
-                      final bbox = detection['bbox'];
-                      bboxInfo = 'Posición: (${bbox['x1'].toStringAsFixed(0)}, '
-                          '${bbox['y1'].toStringAsFixed(0)}) - '
-                          '(${bbox['x2'].toStringAsFixed(0)}, '
-                          '${bbox['y2'].toStringAsFixed(0)})';
-                    }
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Objeto ${index + 1}: $className',
-                                style: const TextStyle(fontWeight: FontWeight.bold)),
-                            Text('Confianza: $formattedConfidence%'),
-                            if (bboxInfo.isNotEmpty) Text(bboxInfo),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-
-              const Divider(),
-              const Text('Respuesta completa:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SelectableText(
-                  analysisResult!.resultados,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
+    if (analysisResult != null) {
+      developer.log('Análisis cargado para la imagen: ${image.file}', name: 'ServerImageDetailScreen');
+      developer.log('Tipo de modelo: ${analysisResult!.tipoModelo}', name: 'ServerImageDetailScreen');
+      developer.log('Número de objetos: ${analysisResult!.numeroObjetos}', name: 'ServerImageDetailScreen');
+      developer.log('Tiempo de procesamiento: ${analysisResult!.tiempoProcesamiento}s', name: 'ServerImageDetailScreen');
+      developer.log('Detecciones disponibles: ${analysisResult!.detecciones.length}', name: 'ServerImageDetailScreen');
+    } else {
+      developer.log('No hay análisis para la imagen: ${image.file}', name: 'ServerImageDetailScreen');
+    }
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('$label: ',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          Expanded(child: Text(value)),
-        ],
-      ),
-    );
+  void _showAnalysisDetails(BuildContext context) {
+    if (analysisResult == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay análisis disponible para esta imagen')),
+      );
+      return;
+    }
+    AnalysisResultsDialog.show(context, analysisResult!);
   }
 
   @override
   Widget build(BuildContext context) {
+
+    // Preparar datos del análisis para mostrar en la interfaz
+    final bool hasAnalysis = analysisResult != null;
+    final String modelName = hasAnalysis ? (analysisResult!.tipoModelo.toUpperCase()) : '';
+    final int objectCount = hasAnalysis ? analysisResult!.numeroObjetos : 0;
+    final double processingTime = hasAnalysis ? analysisResult!.tiempoProcesamiento : 0.0;
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -138,7 +61,7 @@ class ServerImageDetailScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          if (analysisResult != null)
+          if (hasAnalysis)
             IconButton(
               icon: const Icon(Icons.data_usage),
               onPressed: () => _showAnalysisDetails(context),
@@ -183,7 +106,7 @@ class ServerImageDetailScreen extends StatelessWidget {
           ),
 
           // Mostrar resumen de resultados si hay análisis
-          if (analysisResult != null)
+          if (hasAnalysis)
             Container(
               width: double.infinity,
               color: Colors.black.withOpacity(0.8),
@@ -192,7 +115,7 @@ class ServerImageDetailScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Análisis con ${analysisResult!.tipoModelo.toUpperCase()}',
+                    'Análisis con $modelName',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -204,18 +127,21 @@ class ServerImageDetailScreen extends StatelessWidget {
                     children: [
                       _buildStatItem(
                           'Objetos',
-                          analysisResult!.numeroObjetos.toString(),
+                          objectCount.toString(),
                           Icons.policy
                       ),
                       _buildStatItem(
                           'Tiempo',
-                          '${analysisResult!.tiempoProcesamiento.toStringAsFixed(2)}s',
+                          '${processingTime.toStringAsFixed(1)}s',
                           Icons.timer
                       ),
-                      TextButton.icon(
-                        onPressed: () => _showAnalysisDetails(context),
-                        icon: const Icon(Icons.info_outline, color: Colors.blue),
-                        label: const Text('Detalles', style: TextStyle(color: Colors.blue)),
+                      GestureDetector(
+                        onTap: () => _showAnalysisDetails(context),
+                        child: TextButton.icon(
+                          onPressed: () => _showAnalysisDetails(context),
+                          icon: const Icon(Icons.info_outline, color: Colors.blue),
+                          label: const Text('Detalles', style: TextStyle(color: Colors.blue)),
+                        ),
                       ),
                     ],
                   ),

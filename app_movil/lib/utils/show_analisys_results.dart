@@ -7,8 +7,6 @@ import '../entities/analisysresult.dart';
 class AnalysisResultsDialog {
   /// Muestra un diálogo con los resultados del análisis formateados visualmente
   static void show(BuildContext context, AnalysisResult result) {
-    // Registrar la respuesta original para debug
-
     // Procesar los resultados para mostrar de forma más legible
     List<Map<String, dynamic>> processedResults = [];
 
@@ -19,7 +17,6 @@ class AnalysisResultsDialog {
 
       if (jsonData is Map<String, dynamic> && jsonData.containsKey('detections')) {
         final detections = jsonData['detections'] as List;
-
         // Crear un mapa de conteo por clase
         final Map<String, int> countByClass = {};
         final Map<String, double> confidenceSum = {};
@@ -43,8 +40,6 @@ class AnalysisResultsDialog {
           });
         });
 
-        developer.log('Classes encontradas: ${countByClass.keys.join(', ')}',
-            name: 'AnalysisResultsDialog');
       } else {
         developer.log('JSON no tiene formato esperado', name: 'AnalysisResultsDialog');
       }
@@ -90,7 +85,6 @@ class AnalysisResultsDialog {
     // Calcular el total de productos
     final totalProducts = processedResults.fold<int>(
         0, (sum, item) => sum + (item['count'] as int));
-    developer.log('Total de productos: $totalProducts', name: 'AnalysisResultsDialog');
 
     // Formatear la fecha en un formato más amigable
     String formattedDate = result.fechaCreacion;
@@ -99,7 +93,6 @@ class AnalysisResultsDialog {
       formattedDate = '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       developer.log('Error al parsear fecha: $e', name: 'AnalysisResultsDialog');
-      // Mantener el formato original si no se puede parsear
     }
 
     // Usar un AlertDialog para asegurar que se ajuste mejor a diferentes tamaños de pantalla

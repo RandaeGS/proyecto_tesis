@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 
 /// Modelo para representar un resultado de análisis de imagen
@@ -78,6 +79,7 @@ class AnalysisResult {
     List<Map<String, dynamic>> detecciones = [];
     int objCount = 0;
     String modelType = '';
+    double processingTime = 0.0;
 
     // Procesamos la estructura de resultados
     if (resultadosData is Map) {
@@ -86,6 +88,21 @@ class AnalysisResult {
 
       // Extraer conteo de objetos
       objCount = resultadosData['count'] ?? 0;
+
+      // Extraer tiempo de procesamiento (buscar en múltiples posibles claves)
+      List<String> possibleTimeKeys = ['processing_time', 'tiempo', 'time'];
+      for (var key in possibleTimeKeys) {
+        if (resultadosData.containsKey(key)) {
+          var timeValue = resultadosData[key];
+          if (timeValue is num) {
+            processingTime = timeValue.toDouble();
+            break;
+          } else if (timeValue is String) {
+            processingTime = double.tryParse(timeValue) ?? 0.0;
+            break;
+          }
+        }
+      }
 
       // Extraer detecciones
       if (resultadosData.containsKey('detections') && resultadosData['detections'] is List) {
@@ -98,6 +115,16 @@ class AnalysisResult {
         if (objCount == 0) {
           objCount = detecciones.length;
         }
+      }
+    }
+
+    // También intentar obtener el tiempo de procesamiento del objeto principal
+    if (processingTime == 0.0 && json.containsKey('tiempo_procesamiento')) {
+      var timeValue = json['tiempo_procesamiento'];
+      if (timeValue is num) {
+        processingTime = timeValue.toDouble();
+      } else if (timeValue is String) {
+        processingTime = double.tryParse(timeValue) ?? 0.0;
       }
     }
 
@@ -125,7 +152,7 @@ class AnalysisResult {
       fechaCreacion: json['fecha_creacion'] ?? DateTime.now().toString(),
       tipoModelo: json['tipo_modelo'] ?? modelType,
       numeroObjetos: json['numero_objetos'] ?? objCount,
-      tiempoProcesamiento: json['tiempo_procesamiento']?.toDouble() ?? 0.0,
+      tiempoProcesamiento: processingTime,  // Usar el valor extraído
       resultados: formattedJson,
       detecciones: detecciones,
       modeloUsado: modelType,
@@ -133,6 +160,7 @@ class AnalysisResult {
       imageId: imageId,
     );
   }
+
 
   /// Método para formatear el JSON de resultados de manera más legible
   static String _formatResultJson(Map<String, dynamic> json) {

@@ -98,6 +98,24 @@ class ServerImageProvider with ChangeNotifier {
     }
   }
 
+  AnalysisResult? getBestAnalysisForImage(String imageId) {
+    // Primero buscar en las detecciones del centro (que contienen el tiempo correcto)
+    for (var detection in _centerDetections) {
+      if (detection.imageId == imageId) {
+        debugPrint('Encontrado análisis completo para imagen $imageId en centerDetections');
+        return detection;
+      }
+    }
+
+    // Como respaldo, usar el mapa de análisis (que podría tener tiempo=0)
+    final fallbackResult = _analysisResults[imageId];
+    if (fallbackResult != null) {
+      debugPrint('Usando análisis de respaldo para imagen $imageId');
+    }
+
+    return fallbackResult;
+  }
+
   // Carga todas las detecciones de un centro específico
   Future<void> loadDetectionsByCenter(int centerId) async {
     try {

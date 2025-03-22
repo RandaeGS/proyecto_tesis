@@ -204,6 +204,21 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
 
   // Ver detalles de una imagen
   void _viewImage(ServerImage image, AnalysisResult? analysisResult) {
+    // Intentar obtener el mejor análisis disponible usando el nuevo método
+    final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
+    final bestAnalysis = imageProvider.getBestAnalysisForImage(image.id);
+
+    // Si encontramos un mejor análisis, usarlo en lugar del proporcionado
+    if (bestAnalysis != null) {
+      debugPrint('Usando análisis optimizado con tiempo: ${bestAnalysis.tiempoProcesamiento}');
+      analysisResult = bestAnalysis;
+    } else if (analysisResult != null) {
+      debugPrint('Usando análisis proporcionado con tiempo: ${analysisResult.tiempoProcesamiento}');
+    } else {
+      debugPrint('No se encontró ningún análisis para la imagen');
+    }
+
+    // Navegar a la pantalla de detalles
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -368,7 +383,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         itemBuilder: (context, index) {
           final image = imageProvider.centerImages[index];
           final hasAnalysis = imageProvider.analysisResults.containsKey(image.id);
-          final analysisResult = imageProvider.analysisResults[image.id];
+          final analysisResult = imageProvider.getBestAnalysisForImage(image.id);
 
           return Card(
             elevation: 3,
