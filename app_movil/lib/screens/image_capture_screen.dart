@@ -12,6 +12,7 @@ import '../services/images/images_provider.dart';
 import '../services/images/images_service.dart';
 import '../utils/show_analisys_results.dart';
 import 'images/server_screen_managment.dart';
+import 'live_camera/live_camera_screen.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({Key? key}) : super(key: key);
@@ -78,8 +79,6 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
       return;
     }
 
-
-
     try {
       final XFile? photo = await _picker.pickImage(
         source: source,
@@ -122,7 +121,30 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     }
   }
 
-  // Muestra opciones para capturar imagen
+  // NUEVO MÉTODO: Abre la pantalla de detección en vivo
+  void _openLiveDetection() {
+    if (_centerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No tiene un centro asignado'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const LiveCameraDetectionScreen(),
+      ),
+    ).then((_) {
+      // Recargar imágenes al volver
+      _initialize();
+    });
+  }
+
+  // Muestra opciones para capturar imagen (MODIFICADO)
   void _showImageOptions() {
     final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
 
@@ -165,6 +187,27 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             ),
 
             const SizedBox(height: 16),
+
+            // NUEVA OPCIÓN: Detección en vivo
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.videocam, color: Colors.orange),
+              ),
+              title: const Text('Detección en vivo'),
+              subtitle: const Text('Analizar objetos en tiempo real'),
+              onTap: () {
+                Navigator.pop(context);
+                _openLiveDetection();
+              },
+            ),
+
+            const Divider(),
+
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(8),
