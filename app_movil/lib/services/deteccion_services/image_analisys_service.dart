@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 
 import '../../entities/analisysresult.dart';
 import '../core/api_client.dart';
@@ -11,15 +14,68 @@ class ImageAnalysisService {
   final ApiClient _apiClient = ApiClient();
   final StorageService _storageService = StorageService();
 
-  /// Analiza una imagen usando el endpoint de la API
-  Future<AnalysisResult> analyzeImage(File imageFile, String modelType, {int? centerId}) async {
+  /// Prepara una imagen para el análisis, optimizando su formato sin deformaciones
+  Future<File> _prepareImageForAnalysis(File imageFile) async {
     try {
-      debugPrint('Analizando imagen con modelo $modelType');
+      debugPrint('Preparando imagen para análisis: ${imageFile.path}');
+
+      // Verificar si necesitamos procesar la imagen
+      final fileExt = path.extension(imageFile.path).toLowerCase();
+
+      // Si ya es un formato JPEG y su tamaño es razonable, podemos usarlo directamente
+      final fileSize = await imageFile.length();
+      if (fileExt == '.jpg' || fileExt == '.jpeg') {
+        if (fileSize < 2 * 1024 * 1024) { // Menos de 2MB
+          debugPrint('Usando imagen JPEG directamente: ${fileSize ~/ 1024} KB');
+          return imageFile;
+        }
+      }
+
+      // Crear un directorio temporal para guardar la imagen procesada
+      final tempDir = await getTemporaryDirectory();
+      final targetPath = path.join(tempDir.path,
+          'analysis_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      // Usar compresión preservando calidad
+      int quality = 95; // Alta calidad
+      final result = await FlutterImageCompress.compressAndGetFile(
+        imageFile.path,
+        targetPath,
+        quality: quality,
+        keepExif: true, // Mantener metadatos de la imagen
+        autoCorrectionAngle: true, // Corregir rotación automáticamente
+      );
+
+      if (result == null) {
+        debugPrint('Error al comprimir imagen, usando original');
+        return imageFile;
+      }
+
+      // Convertir XFile a File
+      final compressedFile = File(result.path);
+
+      final compressedSize = await compressedFile.length();
+      debugPrint('Imagen preparada: ${compressedSize ~/ 1024} KB');
+
+      return compressedFile;
+    } catch (e) {
+      debugPrint('Error preparando imagen: $e, usando original');
+      return imageFile; // En caso de error, usar la imagen original
+    }
+  }
+
+  /// Analiza una imagen usando el endpoint de la API sin guardar automáticamente
+  Future<AnalysisResult> analyzeImage(File imageFile, String modelType, {int? centerId, bool saveToServer = true}) async {
+    try {
+      debugPrint('Analizando imagen con modelo $modelType, guardar=${saveToServer}');
+
+      // Preparar la imagen para optimizar calidad
+      final preparedImage = await _prepareImageForAnalysis(imageFile);
 
       // Campos adicionales para el análisis
       final fields = {
         'tipo_modelo': modelType,
-        'guardar_imagen': 'true',
+        'guardar_imagen': saveToServer.toString(), // Parámetro de guardar o no
       };
 
       // Añadir centerId si está disponible
@@ -30,7 +86,7 @@ class ImageAnalysisService {
       // Enviar la imagen para análisis
       final data = await _apiClient.uploadFile(
         ApiConstants.analyzeImage,
-        imageFile.path,
+        preparedImage.path,
         'imagen',
         fields,
         entityName: 'Análisis',
@@ -45,6 +101,50 @@ class ImageAnalysisService {
       return result;
     } catch (e) {
       debugPrint('Error en analyzeImage: $e');
+      rethrow;
+    }
+  }
+
+  /// Confirma y guarda los resultados de análisis en el servidor
+  Future<AnalysisResult> confirmAndSaveAnalysis(AnalysisResult result, File imageFile, {int? centerId}) async {
+    try {
+      debugPrint('Confirmando y guardando análisis para imagen: ${imageFile.path}');
+
+      // Preparar la imagen para optimizar calidad
+      final preparedImage = await _prepareImageForAnalysis(imageFile);
+
+      // Campos para la solicitud
+      final fields = {
+        'analysis_id': result.id,
+        'guardar_imagen': 'true',  // Ahora sí queremos guardar
+      };
+
+      // Añadir centerId si está disponible
+      if (centerId != null) {
+        fields['center_id'] = centerId.toString();
+      }
+
+      // Endpoint para confirmar y guardar
+      final endpoint = ApiConstants.confirmAnalysis;
+
+      // Enviar solicitud al servidor
+      final data = await _apiClient.uploadFile(
+        endpoint,
+        preparedImage.path,
+        'imagen',
+        fields,
+        entityName: 'Confirmación',
+      );
+
+      // Actualizar el resultado local con los datos del servidor
+      final updatedResult = AnalysisResult.fromJson(data);
+
+      // Actualizar en almacenamiento local
+      await _storageService.saveAnalysisResult(imageFile.path, updatedResult);
+
+      return updatedResult;
+    } catch (e) {
+      debugPrint('Error en confirmAndSaveAnalysis: $e');
       rethrow;
     }
   }

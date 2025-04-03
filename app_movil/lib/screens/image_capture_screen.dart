@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import '../entities/analisysresult.dart';
 import '../services/auth_services/auth_provider.dart';
 import '../services/deteccion_services/analysis_provider.dart';
+import '../services/deteccion_services/confirmation_dialog.dart';
 import '../services/images/images_provider.dart';
 import '../services/images/images_service.dart';
 import '../utils/show_analisys_results.dart';
@@ -19,6 +20,54 @@ class ImageCaptureScreen extends StatefulWidget {
 
   @override
   State<ImageCaptureScreen> createState() => _ImageCaptureScreenState();
+}
+
+/// Diálogo para mostrar el progreso de análisis de la imagen
+class AnalysisProgressDialog {
+  /// Muestra un diálogo de progreso mientras se analiza la imagen
+  static void show(BuildContext context, {String message = 'Analizando imagen...'}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 16),
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Por favor espere mientras se procesa la imagen',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Cierra el diálogo de progreso
+  static void hide(BuildContext context) {
+    Navigator.of(context, rootNavigator: true).pop();
+  }
 }
 
 class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
@@ -82,42 +131,97 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     try {
       final XFile? photo = await _picker.pickImage(
         source: source,
-        imageQuality: 80,
+        imageQuality: 90, // Aumentar calidad de la imagen
       );
 
       if (photo != null) {
-        setState(() => _isLoading = true);
+        // Mostrar diálogo de progreso
+        AnalysisProgressDialog.show(context);
 
         // Obtener el modelo de detección seleccionado
         final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
         final modelType = analysisProvider.selectedModel;
 
-        // Subir y analizar la imagen
+        // Subir y analizar la imagen SIN GUARDAR automáticamente
         final file = File(photo.path);
+
+        // Debug info
+        debugPrint('Iniciando análisis de imagen: ${file.path}, tamaño: ${await file.length() ~/ 1024} KB');
+
         final result = await analysisProvider.analyzeImage(
           file,
           centerId: _centerId,
+          saveToServer: false, // No guardar automáticamente
         );
 
-        // Recargar imágenes del centro después de analizar
-        await Provider.of<ServerImageProvider>(context, listen: false)
-            .loadCenterImages(_centerId!);
+        // Cerrar diálogo de progreso
+        if (mounted) {
+          AnalysisProgressDialog.hide(context);
+        }
 
-        setState(() => _isLoading = false);
-
-        // Mostrar los resultados con nuestro nuevo diálogo
+        // Verificar si tenemos un resultado para confirmar
         if (mounted && result != null) {
-          _showAnalysisResults(result);
+          // Debug info
+          debugPrint('Análisis completado: ${result.numeroObjetos} objetos detectados');
+
+          // Mostrar diálogo de confirmación
+          final shouldSave = await ConfirmationDialog.show(context, result);
+
+          if (shouldSave == true) {
+            // Usuario confirmó, mostrar progreso de guardado
+            if (mounted) {
+              AnalysisProgressDialog.show(context, message: 'Guardando resultados...');
+            }
+
+            // Confirmar y guardar en el servidor
+            await analysisProvider.confirmAnalysis(centerId: _centerId);
+
+            // Recargar imágenes del centro
+            await Provider.of<ServerImageProvider>(context, listen: false)
+                .loadCenterImages(_centerId!);
+
+            // Cerrar diálogo de progreso
+            if (mounted) {
+              AnalysisProgressDialog.hide(context);
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Resultados guardados correctamente'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+          } else {
+            // Usuario canceló, descartar el resultado
+            analysisProvider.cancelPendingAnalysis();
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Captura cancelada'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            }
+          }
         }
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Cerrar diálogo de progreso en caso de error
+      if (mounted) {
+        AnalysisProgressDialog.hide(context);
+      }
+
+      debugPrint('Error en captura: $e');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

@@ -42,8 +42,9 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
       await imageProvider.loadCenterImages(widget.centerId);
 
       // Obtener conteos de productos directamente del provider
-      _productCounts = imageProvider.getProductCounts();
-      _productCategories = imageProvider.getProductCategories();
+      // Solo contar productos de detecciones confirmadas
+      _productCounts = imageProvider.getProductCounts(onlyConfirmed: true);
+      _productCategories = imageProvider.getProductCategories(onlyConfirmed: true);
 
       // Inicializar el controlador de pestañas
       _tabController = TabController(
@@ -147,7 +148,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
   Widget _buildSummaryTab() {
     return Consumer<ServerImageProvider>(
       builder: (context, imageProvider, _) {
-        final totalImages = imageProvider.centerImages.length;
+        final totalImages = imageProvider.confirmedImages.length;
         final totalProductsDetected = _productCounts.values.fold(0, (sum, count) => sum + count);
 
         return SingleChildScrollView(
@@ -244,8 +245,8 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
   Widget _buildCategoryTab(String category) {
     return Consumer<ServerImageProvider>(
       builder: (context, imageProvider, _) {
-        // Obtener detecciones que contienen esta categoría
-        final detections = imageProvider.centerDetections.where((result) {
+        // Obtener detecciones CONFIRMADAS que contienen esta categoría
+        final detections = imageProvider.confirmedCenterDetections.where((result) {
           return result.detecciones.any((detection) =>
           (detection['class'] ?? 'unknown') == category
           );
@@ -260,7 +261,10 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
         }
 
         // Mostrar imágenes que contienen esta categoría
-        final List<ServerImage> imagesWithCategory = imageProvider.getImagesForCategory(category);
+        final List<ServerImage> imagesWithCategory = imageProvider.getImagesForCategory(
+            category,
+            onlyConfirmed: true
+        );
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,7 +322,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> with 
                   final image = imagesWithCategory[index];
 
                   // Encontrar el resultado de análisis para esta imagen
-                  final analysisResult = imageProvider.analysisResults[image.id];
+                  final analysisResult = imageProvider.getConfirmedAnalysisForImage(image.id);
 
                   // Contar cuántas instancias de esta categoría hay en la imagen
                   int imageInstanceCount = 0;

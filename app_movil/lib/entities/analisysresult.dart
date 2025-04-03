@@ -14,6 +14,7 @@ class AnalysisResult {
   final String modeloUsado;
   final int? centerId;  // ID del centro asociado
   final String? imageId;  // ID de la imagen asociada
+  final bool? confirmed;  // Indica si ha sido confirmado por el usuario
 
   AnalysisResult({
     required this.id,
@@ -26,6 +27,7 @@ class AnalysisResult {
     this.modeloUsado = '',
     this.centerId,
     this.imageId,
+    this.confirmed,
   });
 
   /// Crea una instancia desde un mapa JSON (formato guardado)
@@ -54,6 +56,18 @@ class AnalysisResult {
       imageId = map['image_id'].toString();
     }
 
+    // Obtener estado de confirmación
+    bool? confirmed;
+    if (map.containsKey('confirmed')) {
+      if (map['confirmed'] is bool) {
+        confirmed = map['confirmed'];
+      } else if (map['confirmed'] is String) {
+        confirmed = map['confirmed'].toLowerCase() == 'true';
+      } else if (map['confirmed'] is num) {
+        confirmed = map['confirmed'] != 0;
+      }
+    }
+
     return AnalysisResult(
       id: map['id'] ?? '',
       fechaCreacion: map['fechaCreacion'] ?? '',
@@ -67,6 +81,7 @@ class AnalysisResult {
       modeloUsado: map['modeloUsado'] ?? '',
       centerId: parsedCenterId,
       imageId: imageId,
+      confirmed: confirmed,
     );
   }
 
@@ -147,6 +162,18 @@ class AnalysisResult {
       imageId = json['image_id'].toString();
     }
 
+    // Determinar si está confirmado
+    bool? confirmed;
+    if (json.containsKey('confirmed')) {
+      if (json['confirmed'] is bool) {
+        confirmed = json['confirmed'];
+      } else if (json['confirmed'] is String) {
+        confirmed = json['confirmed'].toLowerCase() == 'true';
+      } else if (json['confirmed'] is num) {
+        confirmed = json['confirmed'] != 0;
+      }
+    }
+
     return AnalysisResult(
       id: json['id']?.toString() ?? json['deteccion_id']?.toString() ?? '',
       fechaCreacion: json['fecha_creacion'] ?? DateTime.now().toString(),
@@ -158,6 +185,7 @@ class AnalysisResult {
       modeloUsado: modelType,
       centerId: parsedCenterId,
       imageId: imageId,
+      confirmed: confirmed,
     );
   }
 
@@ -185,6 +213,7 @@ class AnalysisResult {
       'modeloUsado': modeloUsado,
       'center_id': centerId,
       'image_id': imageId,
+      'confirmed': confirmed,
     };
   }
 
@@ -211,6 +240,7 @@ class AnalysisResult {
     String? modeloUsado,
     int? centerId,
     String? imageId,
+    bool? confirmed,
   }) {
     return AnalysisResult(
       id: id ?? this.id,
@@ -223,6 +253,7 @@ class AnalysisResult {
       modeloUsado: modeloUsado ?? this.modeloUsado,
       centerId: centerId ?? this.centerId,
       imageId: imageId ?? this.imageId,
+      confirmed: confirmed ?? this.confirmed,
     );
   }
 }

@@ -32,6 +32,22 @@ class ServerImageProvider with ChangeNotifier {
   Map<String, AnalysisResult> get analysisResults => _analysisResults;
   List<AnalysisResult> get centerDetections => _centerDetections;
 
+  // Getter para obtener solo detecciones confirmadas
+  List<AnalysisResult> get confirmedCenterDetections =>
+      _centerDetections.where((detection) => detection.confirmed ?? false).toList();
+
+  // Getter para obtener solo imágenes con detecciones confirmadas
+  List<ServerImage> get confirmedImages {
+    // Obtener IDs de imágenes con detecciones confirmadas
+    final confirmedImageIds = confirmedCenterDetections
+        .where((detection) => detection.imageId != null)
+        .map((detection) => detection.imageId!)
+        .toSet();
+
+    // Filtrar imágenes por IDs confirmados
+    return _centerImages.where((image) => confirmedImageIds.contains(image.id)).toList();
+  }
+
   // Carga las imágenes del centro actual
   Future<void> loadCenterImages(int centerId) async {
     _isLoading = true;
@@ -86,7 +102,8 @@ class ServerImageProvider with ChangeNotifier {
             'deteccion_id': detection['id'],
             'tipo_modelo': detection['tipo_modelo'],
             'tiempo_procesamiento': 0.0,
-            'resultados': detection['resultados']
+            'resultados': detection['resultados'],
+            'confirmed': detection['confirmed'] ?? false
           });
 
           _analysisResults[imageId] = result;
@@ -98,6 +115,7 @@ class ServerImageProvider with ChangeNotifier {
     }
   }
 
+  // Obtiene el mejor análisis para una imagen (cualquier confirmación)
   AnalysisResult? getBestAnalysisForImage(String imageId) {
     // Primero buscar en las detecciones del centro (que contienen el tiempo correcto)
     for (var detection in _centerDetections) {
@@ -114,6 +132,26 @@ class ServerImageProvider with ChangeNotifier {
     }
 
     return fallbackResult;
+  }
+
+  // Obtiene el mejor análisis CONFIRMADO para una imagen
+  AnalysisResult? getConfirmedAnalysisForImage(String imageId) {
+    // Buscar en las detecciones confirmadas del centro
+    for (var detection in confirmedCenterDetections) {
+      if (detection.imageId == imageId) {
+        debugPrint('Encontrado análisis confirmado para imagen $imageId');
+        return detection;
+      }
+    }
+
+    // Como respaldo, buscar en el mapa de análisis pero solo si está confirmado
+    final fallbackResult = _analysisResults[imageId];
+    if (fallbackResult != null && (fallbackResult.confirmed ?? false)) {
+      debugPrint('Usando análisis confirmado de respaldo para imagen $imageId');
+      return fallbackResult;
+    }
+
+    return null;
   }
 
   // Carga todas las detecciones de un centro específico
@@ -136,7 +174,7 @@ class ServerImageProvider with ChangeNotifier {
             final result = AnalysisResult.fromJson(item);
 
             // Añadir esto para depuración
-            debugPrint('Detección ID: ${result.id}, Image ID: ${result.imageId}, Center ID: ${result.centerId}');
+            debugPrint('Detección ID: ${result.id}, Image ID: ${result.imageId}, Center ID: ${result.centerId}, Confirmed: ${result.confirmed}');
 
             _centerDetections.add(result);
           } catch (e) {
@@ -148,6 +186,7 @@ class ServerImageProvider with ChangeNotifier {
       }
 
       debugPrint('Cargadas ${_centerDetections.length} detecciones para el centro $centerId');
+      debugPrint('De las cuales ${confirmedCenterDetections.length} están confirmadas');
       notifyListeners();
     } catch (e) {
       debugPrint('Error al cargar detecciones por centro: $e');
@@ -256,12 +295,15 @@ class ServerImageProvider with ChangeNotifier {
   }
 
   // Procesa los datos para obtener conteo de productos por categoría
-  Map<String, int> getProductCounts() {
+  Map<String, int> getProductCounts({bool onlyConfirmed = false}) {
     // Conteo de productos por categoría
     final Map<String, int> counts = {};
 
-    // Iterar sobre todas las detecciones del centro
-    for (var result in _centerDetections) {
+    // Elegir qué lista de detecciones usar
+    final detections = onlyConfirmed ? confirmedCenterDetections : _centerDetections;
+
+    // Iterar sobre las detecciones elegidas
+    for (var result in detections) {
       for (var detection in result.detecciones) {
         final String className = detection['class'] ?? 'unknown';
         counts[className] = (counts[className] ?? 0) + 1;
@@ -272,11 +314,14 @@ class ServerImageProvider with ChangeNotifier {
   }
 
   // Obtiene las categorías de productos únicas
-  List<String> getProductCategories() {
+  List<String> getProductCategories({bool onlyConfirmed = false}) {
     final Set<String> categories = {};
 
-    // Iterar sobre todas las detecciones del centro
-    for (var result in _centerDetections) {
+    // Elegir qué lista de detecciones usar
+    final detections = onlyConfirmed ? confirmedCenterDetections : _centerDetections;
+
+    // Iterar sobre las detecciones elegidas
+    for (var result in detections) {
       for (var detection in result.detecciones) {
         final String className = detection['class'] ?? 'unknown';
         categories.add(className);
@@ -287,13 +332,16 @@ class ServerImageProvider with ChangeNotifier {
     return categoriesList;
   }
 
-// Obtiene las imágenes que contienen una categoría específica
-  List<ServerImage> getImagesForCategory(String category) {
+  // Obtiene las imágenes que contienen una categoría específica
+  List<ServerImage> getImagesForCategory(String category, {bool onlyConfirmed = false}) {
     // Lista de IDs de imágenes que contienen esta categoría
     final Set<String> imageIds = {};
 
-    // Recorrer todas las detecciones para encontrar aquellas que contienen la categoría
-    for (var detection in _centerDetections) {
+    // Elegir qué lista de detecciones usar
+    final detections = onlyConfirmed ? confirmedCenterDetections : _centerDetections;
+
+    // Recorrer las detecciones para encontrar aquellas que contienen la categoría
+    for (var detection in detections) {
       // Verificar si esta detección contiene la categoría
       bool hasCategory = detection.detecciones.any((item) =>
       (item['class'] ?? 'unknown') == category
@@ -312,12 +360,12 @@ class ServerImageProvider with ChangeNotifier {
         .toList();
 
     // Log para depuración
-    debugPrint('Se encontraron ${imagesWithCategory.length} imágenes para la categoría $category');
+    debugPrint('Se encontraron ${imagesWithCategory.length} imágenes para la categoría $category (onlyConfirmed: $onlyConfirmed)');
 
     // Si no se encontraron imágenes, devolver todas las del centro como fallback
     if (imagesWithCategory.isEmpty) {
       debugPrint('No se encontraron imágenes específicas para $category, mostrando todas las del centro');
-      return _centerImages;
+      return onlyConfirmed ? confirmedImages : _centerImages;
     }
 
     return imagesWithCategory;

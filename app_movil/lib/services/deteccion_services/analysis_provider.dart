@@ -14,11 +14,17 @@ class AnalysisProvider with ChangeNotifier {
   String _errorMessage = '';
   String _selectedModel = "yolo";
 
+  // Almacena temporalmente el resultado pendiente de confirmación
+  AnalysisResult? _pendingResult;
+  File? _pendingImageFile;
+
   // Getters
   Map<String, AnalysisResult> get analysisResults => _analysisResults;
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
   String get selectedModel => _selectedModel;
+  AnalysisResult? get pendingResult => _pendingResult;
+  File? get pendingImageFile => _pendingImageFile;
 
   /// Cambia el modelo seleccionado para análisis
   void setSelectedModel(String model) {
@@ -58,18 +64,27 @@ class AnalysisProvider with ChangeNotifier {
     }
   }
 
-  /// Analiza una imagen usando el modelo seleccionado
-  Future<AnalysisResult?> analyzeImage(File imageFile, {int? centerId}) async {
+  /// Analiza una imagen usando el modelo seleccionado sin guardar automáticamente
+  Future<AnalysisResult?> analyzeImage(File imageFile, {int? centerId, bool saveToServer = false}) async {
     _isLoading = true;
     _errorMessage = '';
+    _pendingResult = null;
+    _pendingImageFile = null;
     notifyListeners();
 
     try {
       final result = await _analysisService.analyzeImage(
-        imageFile,
-        _selectedModel,
-        centerId: centerId,
+          imageFile,
+          _selectedModel,
+          centerId: centerId,
+          saveToServer: saveToServer
       );
+
+      // Guardar temporalmente el resultado y la imagen para confirmar
+      if (!saveToServer) {
+        _pendingResult = result;
+        _pendingImageFile = imageFile;
+      }
 
       // Actualizar resultados almacenados
       _analysisResults[imageFile.path] = result;
@@ -83,6 +98,50 @@ class AnalysisProvider with ChangeNotifier {
       notifyListeners();
       return null;
     }
+  }
+
+  /// Confirma y guarda el resultado de análisis pendiente
+  Future<AnalysisResult?> confirmAnalysis({int? centerId}) async {
+    if (_pendingResult == null || _pendingImageFile == null) {
+      _errorMessage = 'No hay resultado pendiente para confirmar';
+      notifyListeners();
+      return null;
+    }
+
+    _isLoading = true;
+    _errorMessage = '';
+    notifyListeners();
+
+    try {
+      final updatedResult = await _analysisService.confirmAndSaveAnalysis(
+          _pendingResult!,
+          _pendingImageFile!,
+          centerId: centerId
+      );
+
+      // Actualizar resultados almacenados
+      _analysisResults[_pendingImageFile!.path] = updatedResult;
+
+      // Limpiar pendientes
+      _pendingResult = null;
+      _pendingImageFile = null;
+
+      _isLoading = false;
+      notifyListeners();
+      return updatedResult;
+    } catch (e) {
+      _errorMessage = 'Error al confirmar análisis: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  /// Cancela el resultado de análisis pendiente
+  void cancelPendingAnalysis() {
+    _pendingResult = null;
+    _pendingImageFile = null;
+    notifyListeners();
   }
 
   /// Elimina un resultado de análisis

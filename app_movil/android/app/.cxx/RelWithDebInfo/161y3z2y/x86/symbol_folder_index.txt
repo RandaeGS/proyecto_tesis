@@ -1,0 +1,1 @@
+/home/friasluna/Tesis_Proyect/proyecto_tesis/app_movil/build/app/intermediates/cxx/RelWithDebInfo/161y3z2y/obj/x86

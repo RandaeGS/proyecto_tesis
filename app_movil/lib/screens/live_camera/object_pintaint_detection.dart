@@ -1,4 +1,4 @@
-// Pintado de las cajas de detección
+// Modificación en tu ObjectDetectionPainter
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
@@ -7,6 +7,16 @@ class ObjectDetectionPainter extends CustomPainter {
   final List<DetectedObject> objects;
   final Size originalSize;
   final Size actualSize;
+
+  // Añadir un mapa de clases personalizado
+  final Map<String, String> customClassMap = {
+    'cup': 'beverage',           // Ejemplos de mapeo
+    'bottle': 'beverage',
+    'food': 'canned_food',
+    'packaged goods': 'cereal',
+    'home good': 'pasta_noodles',
+    // Añade más mapeos según sea necesario
+  };
 
   ObjectDetectionPainter(this.objects, this.originalSize, this.actualSize);
 
@@ -35,10 +45,16 @@ class ObjectDetectionPainter extends CustomPainter {
       // Dibujar el rectángulo
       canvas.drawRect(rect, paint);
 
-      // Dibujar etiqueta si está disponible
+      // Dibujar etiqueta personalizada si está disponible
       if (object.labels.isNotEmpty) {
+        // Obtener la etiqueta de ML Kit
+        final mlKitLabel = object.labels.first.text.toLowerCase();
+
+        // Intentar convertir a una clase personalizada o usar la original
+        final customLabel = customClassMap[mlKitLabel] ?? mlKitLabel;
+
         final textSpan = TextSpan(
-          text: ' ${object.labels.first.text} ',
+          text: ' $customLabel ',
           style: TextStyle(
             color: Colors.white,
             fontSize: 16,

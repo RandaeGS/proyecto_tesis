@@ -1,17 +1,15 @@
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
 import 'package:provider/provider.dart';
-
 import '../../entities/analisysresult.dart';
 import '../../services/auth_services/auth_provider.dart';
 import '../../services/deteccion_services/analysis_provider.dart';
-import '../../services/images/images_provider.dart';
+import '../../services/deteccion_services/confirmation_dialog.dart';
 import '../../utils/show_analisys_results.dart';
+import '../image_capture_screen.dart';
 import 'object_pintaint_detection.dart';
 
 class LiveCameraDetectionScreen extends StatefulWidget {
@@ -29,13 +27,19 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
   bool _isSaving = false;
   int _selectedCameraIndex = 0;
 
-  // ML Kit Object Detection
+  // ML Kit Object Detection (para vista previa local)
   late ObjectDetector _objectDetector;
   List<DetectedObject> _detectedObjects = [];
 
-  // Centro actual
+  // Para detección con el servidor
   int? _centerId;
   String _selectedModel = 'yolo'; // Modelo por defecto
+
+  // Temporizador para análisis periódico
+  Timer? _analysisTimer;
+
+  // Control de visualización
+  bool _showLocalDetection = true; // Mostrar detección local (ML Kit)
 
   @override
   void initState() {
@@ -77,9 +81,6 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
       await _setupCamera(_cameras![_selectedCameraIndex]);
     } catch (e) {
       debugPrint('Error al inicializar la cámara: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al inicializar la cámara: $e'))
-      );
     }
   }
 
@@ -88,118 +89,85 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
       await _cameraController!.dispose();
     }
 
-    // Inicializar controlador con resolución media para mejor rendimiento
     _cameraController = CameraController(
       cameraDescription,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup: Platform.isAndroid
-          ? ImageFormatGroup.yuv420
-          : ImageFormatGroup.bgra8888,
     );
 
     try {
       await _cameraController!.initialize();
 
-      // Iniciar stream de imágenes
-      await _cameraController!.startImageStream(_processCameraImage);
-
       if (mounted) {
         setState(() {
           _isInitialized = true;
         });
+
+        // Iniciar análisis periódico en lugar de stream
+        _startPeriodicAnalysis();
       }
     } catch (e) {
       debugPrint('Error al configurar la cámara: $e');
     }
   }
 
+  void _startPeriodicAnalysis() {
+    // Detener temporizador anterior si existe
+    _analysisTimer?.cancel();
+
+    // Analizar cada 2 segundos (ajustar según las necesidades de rendimiento)
+    _analysisTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      _analyzeCurrentFrame();
+    });
+  }
+
+  Future<void> _analyzeCurrentFrame() async {
+    if (_isProcessing || _cameraController == null || !_cameraController!.value.isInitialized) {
+      return;
+    }
+
+    _isProcessing = true;
+    try {
+      // Capturar una imagen
+      final XFile imageFile = await _cameraController!.takePicture();
+
+      // Procesar la imagen con ML Kit para la vista previa local
+      if (_showLocalDetection) {
+        final inputImage = InputImage.fromFilePath(imageFile.path);
+        final objects = await _objectDetector.processImage(inputImage);
+
+        // Actualizar la UI con la detección local
+        if (mounted) {
+          setState(() {
+            _detectedObjects = objects;
+          });
+        }
+      }
+
+      // Limpiar el archivo temporal
+      try {
+        await File(imageFile.path).delete();
+      } catch (e) {
+        debugPrint('Error al eliminar archivo temporal: $e');
+      }
+    } catch (e) {
+      debugPrint('Error al analizar frame: $e');
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
   Future<void> _initDetector() async {
-    // Usar modelo por defecto de ML Kit para demostración
     final options = ObjectDetectorOptions(
-      mode: DetectionMode.stream,
+      mode: DetectionMode.single,
       classifyObjects: true,
       multipleObjects: true,
     );
     _objectDetector = ObjectDetector(options: options);
   }
 
-  InputImageRotation _getInputImageRotation(int sensorOrientation) {
-    // Normalizar la orientación a 0, 90, 180, 270
-    final rotationDegrees = sensorOrientation % 360;
-
-    switch (rotationDegrees) {
-      case 0:
-        return InputImageRotation.rotation0deg;
-      case 90:
-        return InputImageRotation.rotation90deg;
-      case 180:
-        return InputImageRotation.rotation180deg;
-      case 270:
-        return InputImageRotation.rotation270deg;
-      default:
-      // Si no es uno de los valores exactos, aproximamos al más cercano
-        if (rotationDegrees > 315 || rotationDegrees <= 45) {
-          return InputImageRotation.rotation0deg;
-        } else if (rotationDegrees > 45 && rotationDegrees <= 135) {
-          return InputImageRotation.rotation90deg;
-        } else if (rotationDegrees > 135 && rotationDegrees <= 225) {
-          return InputImageRotation.rotation180deg;
-        } else {
-          return InputImageRotation.rotation270deg;
-        }
-    }
-  }
-
-  void _processCameraImage(CameraImage cameraImage) async {
-    if (_isProcessing) return;
-
-    _isProcessing = true;
-    try {
-      final camera = _cameras![_selectedCameraIndex];
-
-      // Usar el método WriteBuffer para concatenar los planos
-      final WriteBuffer allBytes = WriteBuffer();
-      for (Plane plane in cameraImage.planes) {
-        allBytes.putUint8List(plane.bytes);
-      }
-      final bytes = allBytes.done().buffer.asUint8List();
-
-      // Crear un InputImage con la nueva estructura de metadatos
-      final inputImage = InputImage.fromBytes(
-        bytes: bytes,
-        metadata: InputImageMetadata(
-          size: Size(cameraImage.width.toDouble(), cameraImage.height.toDouble()),
-          rotation: _getInputImageRotation(camera.sensorOrientation),
-          format: InputImageFormat.values[cameraImage.format.raw],
-          bytesPerRow: cameraImage.planes.first.bytesPerRow,
-        ),
-      );
-
-      final objects = await _objectDetector.processImage(inputImage);
-
-      if (mounted) {
-        setState(() {
-          _detectedObjects = objects;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error al procesar imagen: $e');
-    } finally {
-      _isProcessing = false;
-    }
-  }
-
-// Añade este método auxiliar
-  Uint8List _concatenatePlanes(List<Plane> planes) {
-    final WriteBuffer allBytes = WriteBuffer();
-    for (Plane plane in planes) {
-      allBytes.putUint8List(plane.bytes);
-    }
-    return allBytes.done().buffer.asUint8List();
-  }
-
-  Future<void> _captureAndAnalyze() async {
+  // Capturar y analizar con servidor
+  Future<void> _captureAndAnalyzeWithServer() async {
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Cámara no disponible'))
@@ -214,49 +182,78 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
       return;
     }
 
-    // Detener stream para capturar imagen de calidad
     try {
       setState(() {
         _isSaving = true;
       });
 
-      await _cameraController!.stopImageStream();
-
-      // Pequeña pausa para estabilizar la imagen
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Pausar temporizador durante el análisis con servidor
+      _analysisTimer?.cancel();
 
       // Capturar imagen
       final XFile photo = await _cameraController!.takePicture();
 
-      // Analizar con el backend
+      // Analizar con el backend SIN GUARDAR automáticamente
       final file = File(photo.path);
       final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
 
       // Usar el modelo seleccionado
       analysisProvider.setSelectedModel(_selectedModel);
 
-      // Enviar para análisis
+      // Enviar para análisis sin guardar
       final result = await analysisProvider.analyzeImage(
         file,
         centerId: _centerId,
+        saveToServer: false, // No guardar automáticamente
       );
-
-      // Recargar imágenes del centro después de analizar
-      if (_centerId != null) {
-        await Provider.of<ServerImageProvider>(context, listen: false)
-            .loadCenterImages(_centerId!);
-      }
-
-      // Reiniciar stream
-      await _cameraController!.startImageStream(_processCameraImage);
 
       setState(() {
         _isSaving = false;
       });
 
-      // Mostrar resultados
+      // Reiniciar temporizador
+      _startPeriodicAnalysis();
+
+      // Mostrar diálogo de confirmación si tenemos un resultado
       if (mounted && result != null) {
-        _showAnalysisResults(result);
+        // Importar aquí el diálogo de confirmación
+        final shouldSave = await ConfirmationDialog.show(context, result);
+
+        if (shouldSave == true) {
+          // Usuario confirmó, guardamos los resultados
+          setState(() => _isSaving = true);
+
+          // Confirmar y guardar en el servidor
+          final confirmedResult = await analysisProvider.confirmAnalysis(centerId: _centerId);
+
+          setState(() => _isSaving = false);
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Resultados guardados correctamente'),
+                backgroundColor: Colors.green,
+              ),
+            );
+
+            // Mostrar resultados confirmados
+            if (confirmedResult != null) {
+              _showAnalysisResults(confirmedResult);
+            }
+          }
+        } else {
+          // Usuario canceló, descartar el resultado
+          analysisProvider.cancelPendingAnalysis();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Captura cancelada'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
       }
     } catch (e) {
       debugPrint('Error al capturar y analizar: $e');
@@ -264,14 +261,12 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
           SnackBar(content: Text('Error: $e'))
       );
 
-      // Asegurar que se reinicie el stream
-      if (_cameraController != null && !_cameraController!.value.isStreamingImages) {
-        await _cameraController!.startImageStream(_processCameraImage);
-      }
-
       setState(() {
         _isSaving = false;
       });
+
+      // Reiniciar temporizador
+      _startPeriodicAnalysis();
     }
   }
 
@@ -281,6 +276,9 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
 
   void _toggleCamera() async {
     if (_cameras == null || _cameras!.length <= 1) return;
+
+    // Detener análisis periódico
+    _analysisTimer?.cancel();
 
     _selectedCameraIndex = (_selectedCameraIndex + 1) % _cameras!.length;
 
@@ -310,6 +308,21 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
               ),
             ),
             const SizedBox(height: 16),
+
+            // Opción para mostrar/ocultar detección local
+            SwitchListTile(
+              title: const Text('Mostrar detección local'),
+              subtitle: const Text('Previsualizar con ML Kit (solo vista previa)'),
+              value: _showLocalDetection,
+              onChanged: (value) {
+                setState(() {
+                  _showLocalDetection = value;
+                });
+                Navigator.pop(context);
+              },
+            ),
+
+            const Divider(),
 
             // YOLO
             ListTile(
@@ -371,6 +384,7 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
     }
 
     if (state == AppLifecycleState.inactive) {
+      _analysisTimer?.cancel();
       _cameraController?.dispose();
     } else if (state == AppLifecycleState.resumed) {
       _initCamera();
@@ -380,6 +394,7 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _analysisTimer?.cancel();
     _objectDetector.close();
     _cameraController?.dispose();
     super.dispose();
@@ -416,7 +431,7 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
           : const Center(child: CircularProgressIndicator()),
       floatingActionButton: _isInitialized && !_isSaving
           ? FloatingActionButton(
-        onPressed: _captureAndAnalyze,
+        onPressed: _captureAndAnalyzeWithServer,
         backgroundColor: Colors.blue,
         child: const Icon(Icons.camera_alt, color: Colors.white),
       )
@@ -445,17 +460,18 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
           ),
         ),
 
-        // Overlay de objetos detectados
-        CustomPaint(
-          painter: ObjectDetectionPainter(
-              _detectedObjects,
-              Size(
-                  _cameraController!.value.previewSize!.height,
-                  _cameraController!.value.previewSize!.width
-              ),
-              MediaQuery.of(context).size
+        // Overlay de objetos detectados (solo si la detección local está activada)
+        if (_showLocalDetection)
+          CustomPaint(
+            painter: ObjectDetectionPainter(
+                _detectedObjects,
+                Size(
+                    _cameraController!.value.previewSize!.height,
+                    _cameraController!.value.previewSize!.width
+                ),
+                MediaQuery.of(context).size
+            ),
           ),
-        ),
 
         // Información del modelo seleccionado
         Positioned(
@@ -470,7 +486,7 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                'Modelo: ${_selectedModel == 'cl' ? 'YOLO 2.0 (Claude)' : 'YOLO'}',
+                'Modelo: ${_selectedModel == 'cl' ? 'YOLO 2.0' : 'YOLO'}',
                 style: const TextStyle(color: Colors.white),
               ),
             ),
@@ -478,32 +494,33 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
         ),
 
         // Contador de objetos detectados
-        Positioned(
-          bottom: 100,
-          right: 20,
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${_detectedObjects.length} objetos',
-                  style: const TextStyle(color: Colors.white),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Toca para guardar',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ],
+        if (_showLocalDetection)
+          Positioned(
+            bottom: 100,
+            right: 20,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${_detectedObjects.length} objetos locales',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Toca el botón para analizar con servidor',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
 
         // Indicador de procesamiento
         if (_isSaving)
@@ -516,7 +533,7 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
                   CircularProgressIndicator(),
                   SizedBox(height: 16),
                   Text(
-                    'Procesando y guardando...',
+                    'Procesando con el servidor...',
                     style: TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ],
@@ -527,4 +544,3 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
     );
   }
 }
-
