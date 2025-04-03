@@ -216,12 +216,21 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
 
       // Mostrar diálogo de confirmación si tenemos un resultado
       if (mounted && result != null) {
-        // Importar aquí el diálogo de confirmación
-        final shouldSave = await ConfirmationDialog.show(context, result);
+        // Usar el nuevo diálogo de confirmación con edición de cantidades
+        // MODIFICADO: Ahora esperamos un Map<String, dynamic> que contiene las modificaciones
+        final editResult = await ConfirmationDialog.show(context, result);
 
-        if (shouldSave == true) {
-          // Usuario confirmó, guardamos los resultados
+        if (editResult != null) {
+          // Usuario confirmó, guardamos los resultados con posibles modificaciones
           setState(() => _isSaving = true);
+
+          // NUEVO: Actualizar el análisisProvider con los resultados modificados
+          final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
+
+          // Proporcionar los resultados modificados al provider
+          if (editResult.containsKey('modified_results')) {
+            analysisProvider.setModifiedResults(editResult['modified_results']);
+          }
 
           // Confirmar y guardar en el servidor
           final confirmedResult = await analysisProvider.confirmAnalysis(centerId: _centerId);

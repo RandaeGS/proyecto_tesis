@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -106,7 +107,12 @@ class ImageAnalysisService {
   }
 
   /// Confirma y guarda los resultados de análisis en el servidor
-  Future<AnalysisResult> confirmAndSaveAnalysis(AnalysisResult result, File imageFile, {int? centerId}) async {
+  /// Ahora con soporte para resultados modificados por el usuario
+  Future<AnalysisResult> confirmAndSaveAnalysis(
+      AnalysisResult result,
+      File imageFile,
+      {int? centerId, Map<String, dynamic>? modifiedResults}
+      ) async {
     try {
       debugPrint('Confirmando y guardando análisis para imagen: ${imageFile.path}');
 
@@ -124,6 +130,15 @@ class ImageAnalysisService {
         fields['center_id'] = centerId.toString();
       }
 
+      // Si hay resultados modificados, agregarlos a los campos
+      if (modifiedResults != null) {
+        // Convertir modifiedResults a JSON y pasarlo como string en los campos
+        fields['resultados_modificados'] = json.encode(modifiedResults);
+
+        debugPrint('Enviando resultados modificados al servidor');
+        debugPrint('Objetos en resultados modificados: ${modifiedResults['count']}');
+      }
+
       // Endpoint para confirmar y guardar
       final endpoint = ApiConstants.confirmAnalysis;
 
@@ -134,6 +149,8 @@ class ImageAnalysisService {
         'imagen',
         fields,
         entityName: 'Confirmación',
+        // En una implementación real, pasaríamos modifiedResults como body adicional
+        // o como un campo de formulario serializado a JSON
       );
 
       // Actualizar el resultado local con los datos del servidor

@@ -117,6 +117,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   }
 
   // Captura una nueva imagen
+  // Captura una nueva imagen
   Future<void> _captureImage(ImageSource source) async {
     if (_centerId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -164,13 +165,22 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           // Debug info
           debugPrint('Análisis completado: ${result.numeroObjetos} objetos detectados');
 
-          // Mostrar diálogo de confirmación
-          final shouldSave = await ConfirmationDialog.show(context, result);
+          // Mostrar diálogo de confirmación con edición de cantidades
+          // MODIFICADO: Ahora esperamos un Map<String, dynamic> que contiene las modificaciones
+          final editResult = await ConfirmationDialog.show(context, result);
 
-          if (shouldSave == true) {
-            // Usuario confirmó, mostrar progreso de guardado
+          if (editResult != null) {
+            // Usuario confirmó con posibles modificaciones, mostrar progreso de guardado
             if (mounted) {
               AnalysisProgressDialog.show(context, message: 'Guardando resultados...');
+            }
+
+            // Actualizar el análisisProvider con los resultados modificados
+            final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
+
+            // NUEVO: Proporcionar los resultados modificados al provider
+            if (editResult.containsKey('modified_results')) {
+              analysisProvider.setModifiedResults(editResult['modified_results']);
             }
 
             // Confirmar y guardar en el servidor
@@ -224,6 +234,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
       }
     }
   }
+
 
   // NUEVO MÉTODO: Abre la pantalla de detección en vivo
   void _openLiveDetection() {

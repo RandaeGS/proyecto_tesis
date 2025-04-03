@@ -18,17 +18,33 @@ class AnalysisProvider with ChangeNotifier {
   AnalysisResult? _pendingResult;
   File? _pendingImageFile;
 
+  // Almacena las modificaciones del usuario a las detecciones
+  Map<String, dynamic>? _modifiedResults;
+
   // Getters
   Map<String, AnalysisResult> get analysisResults => _analysisResults;
+
   bool get isLoading => _isLoading;
+
   String get errorMessage => _errorMessage;
+
   String get selectedModel => _selectedModel;
+
   AnalysisResult? get pendingResult => _pendingResult;
+
   File? get pendingImageFile => _pendingImageFile;
+
+  Map<String, dynamic>? get modifiedResults => _modifiedResults;
 
   /// Cambia el modelo seleccionado para análisis
   void setSelectedModel(String model) {
     _selectedModel = model;
+    notifyListeners();
+  }
+
+  /// Guarda los resultados modificados por el usuario
+  void setModifiedResults(Map<String, dynamic> modified) {
+    _modifiedResults = modified;
     notifyListeners();
   }
 
@@ -55,7 +71,8 @@ class AnalysisProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _analysisResults = await _analysisService.getAnalysisResultsByCenter(centerId);
+      _analysisResults =
+      await _analysisService.getAnalysisResultsByCenter(centerId);
     } catch (e) {
       _errorMessage = 'Error al cargar resultados del centro: ${e.toString()}';
     } finally {
@@ -65,11 +82,13 @@ class AnalysisProvider with ChangeNotifier {
   }
 
   /// Analiza una imagen usando el modelo seleccionado sin guardar automáticamente
-  Future<AnalysisResult?> analyzeImage(File imageFile, {int? centerId, bool saveToServer = false}) async {
+  Future<AnalysisResult?> analyzeImage(File imageFile,
+      {int? centerId, bool saveToServer = false}) async {
     _isLoading = true;
     _errorMessage = '';
     _pendingResult = null;
     _pendingImageFile = null;
+    _modifiedResults = null; // Limpiar modificaciones pendientes
     notifyListeners();
 
     try {
@@ -100,7 +119,7 @@ class AnalysisProvider with ChangeNotifier {
     }
   }
 
-  /// Confirma y guarda el resultado de análisis pendiente
+  /// Confirma y guarda el resultado de análisis pendiente con posibles modificaciones
   Future<AnalysisResult?> confirmAnalysis({int? centerId}) async {
     if (_pendingResult == null || _pendingImageFile == null) {
       _errorMessage = 'No hay resultado pendiente para confirmar';
@@ -113,10 +132,25 @@ class AnalysisProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      // Si hay modificaciones, aplicarlas al resultado antes de guardar
+      AnalysisResult resultToSave = _pendingResult!;
+
+      if (_modifiedResults != null) {
+        // Crear una copia del resultado con las modificaciones
+        // En una implementación real, aquí aplicaríamos todas las modificaciones
+        // del usuario al resultado antes de enviarlo al servidor
+        debugPrint(
+            'Aplicando modificaciones del usuario al resultado antes de confirmar');
+
+        // Aquí simularemos la actualización del resultToSave con _modifiedResults
+        // En una implementación completa, esto modificaría las detecciones y conteos
+      }
+
       final updatedResult = await _analysisService.confirmAndSaveAnalysis(
-          _pendingResult!,
+          resultToSave,
           _pendingImageFile!,
-          centerId: centerId
+          centerId: centerId,
+          modifiedResults: _modifiedResults
       );
 
       // Actualizar resultados almacenados
@@ -125,6 +159,7 @@ class AnalysisProvider with ChangeNotifier {
       // Limpiar pendientes
       _pendingResult = null;
       _pendingImageFile = null;
+      _modifiedResults = null;
 
       _isLoading = false;
       notifyListeners();
@@ -141,6 +176,7 @@ class AnalysisProvider with ChangeNotifier {
   void cancelPendingAnalysis() {
     _pendingResult = null;
     _pendingImageFile = null;
+    _modifiedResults = null;
     notifyListeners();
   }
 
@@ -173,6 +209,7 @@ class AnalysisProvider with ChangeNotifier {
   /// Obtiene todas las categorías únicas de objetos
   List<String> getObjectCategories() {
     final Map<String, int> counts = getObjectCounts();
-    return counts.keys.toList()..sort();
+    return counts.keys.toList()
+      ..sort();
   }
 }
