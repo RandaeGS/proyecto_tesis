@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../inventory/screen/analytics_screen.dart';
 import '../inventory/screen/inventory_report_screen.dart';
 import '../inventory/screen/inventory_snapshot_screen.dart';
+import '../inventory/screen/manual_inventory_screen.dart';
 import '../services/auth_services/auth_provider.dart';
 import '../services/deteccion_services/image_analisys_service.dart';
 import '../services/user_provider.dart';
@@ -373,6 +374,34 @@ class _HomeScreenState extends State<HomeScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const AnalyticsScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                _buildOptionCard(
+                  title: 'Gestión Manual de Inventario',
+                  description: 'Actualizar y gestionar el inventario manualmente sin necesidad de imágenes',
+                  icon: Icons.edit_note,
+                  onTap: () {
+                    // Verificar que el usuario tenga un centro asignado
+                    if (authProvider.centerId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('No tiene un centro asignado'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Navegar a la pantalla de gestión manual de inventario
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ManualInventoryManagementScreen(
+                          centerId: authProvider.centerId!,
+                        ),
                       ),
                     );
                   },

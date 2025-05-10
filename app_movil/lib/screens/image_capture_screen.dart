@@ -6,6 +6,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:path/path.dart' as path;
 
 import '../entities/analisysresult.dart';
+import '../inventory/services/inventory_comparison_provider.dart';
+import '../inventory/services/inventory_sync_service.dart';
 import '../services/auth_services/auth_provider.dart';
 import '../services/deteccion_services/analysis_provider.dart';
 import '../services/deteccion_services/confirmation_dialog.dart';
@@ -453,6 +455,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   }
 
   Widget _buildErrorState() {
+    // Obtener el imageProvider desde el contexto
+    final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -486,6 +491,105 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             onPressed: _initialize,
             icon: const Icon(Icons.refresh),
             label: const Text('Reintentar'),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.sync),
+            label: const Text('Sincronizar con Inventario'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              // Verificar que haya detecciones confirmadas
+              if (imageProvider.confirmedCenterDetections.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('No hay detecciones confirmadas para sincronizar'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                return;
+              }
+
+              // Mostrar diálogo de confirmación
+              final doSync = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Sincronizar con Inventario'),
+                  content: const Text(
+                      'Esto actualizará el inventario con los productos detectados en las imágenes. '
+                          '¿Deseas continuar?'
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                      ),
+                      child: const Text('Sincronizar'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (doSync != true) return;
+
+              // Mostrar indicador de carga
+              setState(() {
+                _isLoading = true;
+              });
+
+              try {
+                // Obtener el ID del centro
+                final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                final centerId = authProvider.centerId;
+
+                if (centerId == null) {
+                  throw Exception('No se pudo identificar el centro');
+                }
+
+                // Inicializar el servicio de sincronización
+                final inventoryProvider = Provider.of<InventoryComparisonProvider>(
+                    context,
+                    listen: false
+                );
+
+                final syncService = InventorySyncService(
+                  imageProvider: imageProvider,
+                  inventoryProvider: inventoryProvider,
+                );
+
+                // Realizar la sincronización
+                final success = await syncService.syncInventoryWithImages(centerId);
+
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Inventario sincronizado correctamente'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  throw Exception('No se pudo sincronizar el inventario');
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              } finally {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
+            },
           ),
         ],
       ),
