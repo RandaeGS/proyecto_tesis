@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../entities/analisysresult.dart';
 import 'inventory_comparison_services.dart';
-import 'inventory_snapshot.dart';
+import '../inventory_snapshot.dart';
 
 class InventoryComparisonProvider with ChangeNotifier {
   final InventoryComparisonService _comparisonService = InventoryComparisonService();
@@ -45,6 +46,7 @@ class InventoryComparisonProvider with ChangeNotifier {
 
     } catch (e) {
       _errorMessage = 'Error al cargar instantáneas de inventario: $e';
+      debugPrint(_errorMessage);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -64,12 +66,20 @@ class InventoryComparisonProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      // Convertir la lista dinámica a una lista de AnalysisResult
+      final List<AnalysisResult> typedResults = [];
+      for (final result in sourceResults) {
+        if (result is AnalysisResult) {
+          typedResults.add(result);
+        }
+      }
+
       final success = await _comparisonService.saveInventorySnapshot(
         centerId,
         name,
         description,
         productCounts,
-        sourceResults,
+        typedResults,
       );
 
       if (success) {
@@ -81,6 +91,7 @@ class InventoryComparisonProvider with ChangeNotifier {
       return success;
     } catch (e) {
       _errorMessage = 'Error al guardar instantánea de inventario: $e';
+      debugPrint(_errorMessage);
       _isLoading = false;
       notifyListeners();
       return false;
@@ -123,6 +134,7 @@ class InventoryComparisonProvider with ChangeNotifier {
       return success;
     } catch (e) {
       _errorMessage = 'Error al eliminar instantánea de inventario: $e';
+      debugPrint(_errorMessage);
       return false;
     } finally {
       _isLoading = false;
