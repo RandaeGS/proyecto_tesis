@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../entities/analisysresult.dart';
-import '../inventory_snapshot.dart';
+import '../entity/inventory_difference.dart';
+import '../entity/inventory_snapshot.dart';
 
 /// Servicio para manejar la comparación de inventarios a lo largo del tiempo
 class InventoryComparisonService {
@@ -121,21 +122,4 @@ class InventoryComparisonService {
 
     return differences;
   }
-}
-
-/// Modelo para representar la diferencia en el inventario de un producto
-class InventoryDifference {
-  final String category;
-  final int initialCount;
-  final int currentCount;
-  final int difference;
-  final String percentageChange;
-
-  InventoryDifference({
-    required this.category,
-    required this.initialCount,
-    required this.currentCount,
-    required this.difference,
-    required this.percentageChange,
-  });
 }

@@ -5,6 +5,12 @@ import 'package:app_movil/services/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'inventory/screen/analytics_screen.dart';
+import 'inventory/screen/inventory_report_screen.dart';
+import 'inventory/screen/inventory_snapshot_screen.dart';
+import 'inventory/services/analytics_provider.dart';
+import 'inventory/services/inventory_comparison_provider.dart';
+import 'inventory/services/inventory_report_provider.dart';
 import 'screens/auth_screens/config_screen.dart';
 import 'screens/auth_screens/login_screen.dart';
 import 'screens/auth_screens/register_screen.dart';
@@ -27,6 +33,9 @@ void main() async {
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => AnalysisProvider()),
         ChangeNotifierProvider(create: (_) => ServerImageProvider()),
+        ChangeNotifierProvider(create: (_) => InventoryComparisonProvider()),
+        ChangeNotifierProvider(create: (_) => InventoryReportProvider()),
+        ChangeNotifierProvider(create: (_) => AnalyticsProvider()), // Nuevo provider para análisis
       ],
       child: const MyApp(),
     ),
@@ -74,6 +83,9 @@ class MyApp extends StatelessWidget {
         '/users': (context) => const UserListScreen(),
         '/images': (context) => const ImageCaptureScreen(),
         '/config': (context) => const ConfigScreen(),
+        '/inventory': (context) => const InventorySnapshotScreen(),
+        '/reports': (context) => const InventoryReportScreen(),
+        '/analytics': (context) => const AnalyticsScreen(),
       },
     );
   }

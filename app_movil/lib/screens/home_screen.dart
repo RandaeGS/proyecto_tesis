@@ -2,6 +2,9 @@ import 'package:app_movil/screens/product_managment/product_screen_managment.dar
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../inventory/screen/analytics_screen.dart';
+import '../inventory/screen/inventory_report_screen.dart';
+import '../inventory/screen/inventory_snapshot_screen.dart';
 import '../services/auth_services/auth_provider.dart';
 import '../services/deteccion_services/image_analisys_service.dart';
 import '../services/user_provider.dart';
@@ -105,201 +108,286 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Información del usuario
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            backgroundColor: Colors.blue.shade100,
-                            radius: 30,
-                            child: Text(
-                              user?.name.isNotEmpty == true
-                                  ? user!.name[0].toUpperCase()
-                                  : '?',
-                              style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Información del usuario
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: Colors.blue.shade100,
+                              radius: 30,
+                              child: Text(
+                                user?.name.isNotEmpty == true
+                                    ? user!.name[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
                               ),
                             ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    user?.name ?? 'Usuario',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    user?.email ?? 'email@example.com',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    isAdmin
+                                        ? 'Administrador'
+                                        : 'Usuario estándar',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: isAdmin
+                                          ? Colors.blue
+                                          : Colors.grey.shade700,
+                                      fontWeight: isAdmin
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        // Mostrar información del centro si está disponible
+                        if (userCenter != null) ...[
+                          const Divider(height: 24),
+                          Text(
+                            'Centro de acopio:',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  user?.name ?? 'Usuario',
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.business,
+                                size: 18,
+                                color: Colors.blue.shade700,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  userCenter.name,
                                   style: const TextStyle(
-                                    fontSize: 18,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  user?.email ?? 'email@example.com',
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.location_on,
+                                size: 18,
+                                color: Colors.grey.shade700,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  userCenter.address,
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.grey.shade700,
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  isAdmin
-                                      ? 'Administrador'
-                                      : 'Usuario estándar',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: isAdmin
-                                        ? Colors.blue
-                                        : Colors.grey.shade700,
-                                    fontWeight: isAdmin
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ],
-                      ),
-
-                      // Mostrar información del centro si está disponible
-                      if (userCenter != null) ...[
-                        const Divider(height: 24),
-                        Text(
-                          'Centro de acopio:',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.business,
-                              size: 18,
-                              color: Colors.blue.shade700,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                userCenter.name,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.location_on,
-                              size: 18,
-                              color: Colors.grey.shade700,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                userCenter.address,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // Título de sección
-              Text(
-                'Menú Principal',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade800,
+                // Título de sección
+                Text(
+                  'Menú Principal',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade800,
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // Opciones disponibles para todos los usuarios
-              _buildOptionCard(
-                title: 'Imágenes',
-                description: 'Capturar y visualizar imágenes',
-                icon: Icons.camera_alt,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ImageCaptureScreen(),
-                    ),
-                  );
-                },
-              ),
-
-              _buildOptionCard(
-                title: 'Gestión de Productos',
-                description: 'Visualizar y gestionar productos detectados',
-                icon: Icons.inventory,
-                onTap: () {
-                  // Verificar que el usuario tenga un centro asignado
-                  if (authProvider.centerId == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('No tiene un centro asignado'),
-                        backgroundColor: Colors.red,
+                // Opciones disponibles para todos los usuarios
+                _buildOptionCard(
+                  title: 'Imágenes',
+                  description: 'Capturar y visualizar imágenes',
+                  icon: Icons.camera_alt,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ImageCaptureScreen(),
                       ),
                     );
-                    return;
-                  }
+                  },
+                ),
 
-                  // Obtener el ID del centro del usuario
-                  final int currentCenterId = authProvider.centerId!;
+                _buildOptionCard(
+                  title: 'Gestión de Productos',
+                  description: 'Visualizar y gestionar productos detectados',
+                  icon: Icons.inventory,
+                  onTap: () {
+                    // Verificar que el usuario tenga un centro asignado
+                    if (authProvider.centerId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('No tiene un centro asignado'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
 
-                  // Navegar a la pantalla de gestión
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ProductManagementScreen(
-                        centerId: currentCenterId,
+                    // Obtener el ID del centro del usuario
+                    final int currentCenterId = authProvider.centerId!;
+
+                    // Navegar a la pantalla de gestión
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ProductManagementScreen(
+                          centerId: currentCenterId,
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
+                    );
+                  },
+                ),
 
-              // Opciones adicionales para administradores
-              if (isAdmin) ...[
-                const SizedBox(height: 8),
-                ..._buildAdminOptions(context),
+                // Opción de Instantáneas de Inventario
+                _buildOptionCard(
+                  title: 'Instantáneas de Inventario',
+                  description: 'Guardar y comparar estados del inventario a lo largo del tiempo',
+                  icon: Icons.compare_arrows,
+                  onTap: () {
+                    // Verificar que el usuario tenga un centro asignado
+                    if (authProvider.centerId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('No tiene un centro asignado'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Navegar a la pantalla de instantáneas de inventario
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const InventorySnapshotScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                // NUEVA OPCIÓN: Informes de Reposición
+                _buildOptionCard(
+                  title: 'Informes de Reposición',
+                  description: 'Generar informes sobre qué productos deben reponerse',
+                  icon: Icons.assignment,
+                  onTap: () {
+                    // Verificar que el usuario tenga un centro asignado
+                    if (authProvider.centerId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('No tiene un centro asignado'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Navegar a la pantalla de informes
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const InventoryReportScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                _buildOptionCard(
+                  title: 'Análisis de Consumo',
+                  description: 'Generar reportes analíticos sobre el consumo de productos por categoría y período',
+                  icon: Icons.analytics,
+                  onTap: () {
+                    // Verificar que el usuario tenga un centro asignado
+                    if (authProvider.centerId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('No tiene un centro asignado'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Navegar a la pantalla de análisis
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AnalyticsScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                // Opciones adicionales para administradores
+                if (isAdmin) ...[
+                  const SizedBox(height: 8),
+                  ..._buildAdminOptions(context),
+                ],
+
+                // Agregar espacio adicional al final para evitar problemas con el último elemento
+                const SizedBox(height: 20),
               ],
-            ],
+            ),
           ),
         ),
       ),

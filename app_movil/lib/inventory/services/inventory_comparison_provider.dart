@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../entities/analisysresult.dart';
+import '../entity/inventory_difference.dart';
 import 'inventory_comparison_services.dart';
-import '../inventory_snapshot.dart';
+import '../entity/inventory_snapshot.dart';
 
 class InventoryComparisonProvider with ChangeNotifier {
   final InventoryComparisonService _comparisonService = InventoryComparisonService();

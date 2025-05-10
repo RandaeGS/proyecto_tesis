@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../entity/inventory_difference.dart';
 import '../services/inventory_comparison_provider.dart';
 import '../services/inventory_comparison_services.dart';
-import '../inventory_snapshot.dart';
+import '../entity/inventory_snapshot.dart';
 
 class InventoryComparisonScreen extends StatefulWidget {
   const InventoryComparisonScreen({Key? key}) : super(key: key);
