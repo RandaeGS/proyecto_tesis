@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
 import '../entity/analytics_report.dart';
 import '../entity/inventory_snapshot.dart';
-import 'analytics_services.dart';
+import '../../services/config.dart';
 
 class AnalyticsProvider with ChangeNotifier {
-  final AnalyticsService _analyticsService = AnalyticsService();
+  final _baseUrl = '${AppConfig.getApiUrl()}/inventory/api';
+  String? _authToken;
 
   List<AnalyticsReport> _reports = [];
   AnalyticsReport? _selectedReport;
@@ -17,23 +21,56 @@ class AnalyticsProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
 
-  /// Carga los reportes analíticos para un centro específico
+  /// Converts PeriodType enum to string for API
+  String _periodTypeToString(PeriodType periodType) {
+    switch (periodType) {
+      case PeriodType.weekly:
+        return 'weekly';
+      case PeriodType.monthly:
+        return 'monthly';
+      default:
+        return 'weekly'; // Default to weekly
+    }
+  }
+
+  /// Sets the authentication token to use for API requests
+  void setAuthToken(String token) {
+    _authToken = token;
+  }
+
+  /// Load analytics reports for a specific center
   Future<void> loadReports(int centerId) async {
     _isLoading = true;
     _errorMessage = '';
     notifyListeners();
 
     try {
-      _reports = await _analyticsService.getReports(centerId);
+      final url = Uri.parse('$_baseUrl/analytics/by_center/?center_id=$centerId');
 
-      // Ordenar por fecha de creación (más recientes primero)
-      _reports.sort((a, b) =>
-          DateTime.parse(b.createdAt).compareTo(DateTime.parse(a.createdAt))
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
       );
 
-      // Resetear el reporte seleccionado
-      _selectedReport = null;
+      if (response.statusCode == 200) {
+        final List<dynamic> reportsJson = json.decode(response.body);
 
+        _reports = reportsJson.map((json) => AnalyticsReport.fromJson(json)).toList();
+
+        // Sort by creation date (most recent first)
+        _reports.sort((a, b) =>
+            DateTime.parse(b.createdAt).compareTo(DateTime.parse(a.createdAt))
+        );
+
+        // Reset selected report
+        _selectedReport = null;
+      } else {
+        _errorMessage = 'Error al cargar reportes analíticos: ${response.statusCode}';
+        debugPrint(_errorMessage);
+      }
     } catch (e) {
       _errorMessage = 'Error al cargar reportes analíticos: $e';
       debugPrint(_errorMessage);
@@ -43,7 +80,7 @@ class AnalyticsProvider with ChangeNotifier {
     }
   }
 
-  /// Genera un reporte analítico de consumo
+  /// Generate a consumption report
   Future<AnalyticsReport?> generateConsumptionReport({
     required int centerId,
     required InventorySnapshot startSnapshot,
@@ -57,22 +94,42 @@ class AnalyticsProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final report = await _analyticsService.generateConsumptionReport(
-        centerId: centerId,
-        startSnapshot: startSnapshot,
-        endSnapshot: endSnapshot,
-        periodType: periodType,
-        selectedCategories: selectedCategories,
-        reportName: reportName,
+      // Prepare data for API
+      final data = {
+        'start_snapshot_id': startSnapshot.id,
+        'end_snapshot_id': endSnapshot.id,
+        'period_type': _periodTypeToString(periodType), // Convert enum to string
+        'selected_categories': selectedCategories,
+        if (reportName != null && reportName.isNotEmpty) 'report_name': reportName,
+      };
+
+      final url = Uri.parse('$_baseUrl/analytics/generate/');
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
+        body: json.encode(data),
       );
 
-      // Recargar los reportes para incluir el nuevo
-      await loadReports(centerId);
+      if (response.statusCode == 200) {
+        final reportJson = json.decode(response.body);
+        final report = AnalyticsReport.fromJson(reportJson);
 
-      // Seleccionar el nuevo reporte
-      _selectedReport = report;
+        // Reload reports to include the new one
+        await loadReports(centerId);
 
-      return report;
+        // Select the newly created report
+        _selectedReport = report;
+
+        return report;
+      } else {
+        _errorMessage = 'Error al generar reporte analítico: ${response.statusCode}';
+        debugPrint(_errorMessage);
+        return null;
+      }
     } catch (e) {
       _errorMessage = 'Error al generar reporte analítico: $e';
       debugPrint(_errorMessage);
@@ -83,40 +140,39 @@ class AnalyticsProvider with ChangeNotifier {
     }
   }
 
-  /// Selecciona un reporte específico
-  void selectReport(AnalyticsReport report) {
-    _selectedReport = report;
-    notifyListeners();
-  }
-
-  /// Limpia la selección actual
-  void clearSelection() {
-    _selectedReport = null;
-    notifyListeners();
-  }
-
-  /// Elimina un reporte
+  /// Delete an analytics report
   Future<bool> deleteReport(int centerId, String reportId) async {
     _isLoading = true;
     _errorMessage = '';
     notifyListeners();
 
     try {
-      final success = await _analyticsService.deleteReport(centerId, reportId);
+      final url = Uri.parse('$_baseUrl/analytics/$reportId/');
 
-      if (success) {
-        // Actualizar la lista local
+      final response = await http.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
+      );
+
+      if (response.statusCode == 204) {
+        // Update local list
         _reports.removeWhere((report) => report.id == reportId);
 
-        // Si el reporte eliminado era el seleccionado, limpiar la selección
+        // If the deleted report was the selected one, clear selection
         if (_selectedReport?.id == reportId) {
           _selectedReport = null;
         }
-      } else {
-        _errorMessage = 'No se pudo eliminar el reporte';
-      }
 
-      return success;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = 'No se pudo eliminar el reporte: ${response.statusCode}';
+        notifyListeners();
+        return false;
+      }
     } catch (e) {
       _errorMessage = 'Error al eliminar reporte: $e';
       debugPrint(_errorMessage);
@@ -127,19 +183,32 @@ class AnalyticsProvider with ChangeNotifier {
     }
   }
 
-  /// Obtiene reportes filtrados por tipo de período
-  List<AnalyticsReport> getReportsByPeriodType(PeriodType periodType) {
-    return _reports.where((report) => report.periodType == periodType).toList();
+  /// Select a specific report
+  void selectReport(AnalyticsReport report) {
+    _selectedReport = report;
+    notifyListeners();
   }
 
-  /// Obtiene reportes que incluyen una categoría específica
+  /// Clear the current selection
+  void clearSelection() {
+    _selectedReport = null;
+    notifyListeners();
+  }
+
+  /// Get reports filtered by period type
+  List<AnalyticsReport> getReportsByPeriodType(PeriodType periodType) {
+    final periodTypeStr = _periodTypeToString(periodType);
+    return _reports.where((report) => report.periodType == periodTypeStr).toList();
+  }
+
+  /// Get reports that include a specific category
   List<AnalyticsReport> getReportsByCategory(String category) {
     return _reports.where((report) => report.categories.contains(category)).toList();
   }
 
-  /// Obtiene el reporte más reciente
+  /// Get the latest report
   AnalyticsReport? getLatestReport() {
     if (_reports.isEmpty) return null;
-    return _reports.first; // Ya están ordenados por fecha
+    return _reports.first; // Already sorted by date
   }
 }

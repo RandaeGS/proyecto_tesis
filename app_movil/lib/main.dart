@@ -1,7 +1,3 @@
-import 'package:app_movil/services/auth_services/auth_provider.dart';
-import 'package:app_movil/services/deteccion_services/analysis_provider.dart';
-import 'package:app_movil/services/images/images_provider.dart';
-import 'package:app_movil/services/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,20 +7,25 @@ import 'inventory/screen/inventory_snapshot_screen.dart';
 import 'inventory/services/analytics_provider.dart';
 import 'inventory/services/inventory_comparison_provider.dart';
 import 'inventory/services/inventory_report_provider.dart';
+import 'inventory/services/product_data_provider.dart';
 import 'screens/auth_screens/config_screen.dart';
 import 'screens/auth_screens/login_screen.dart';
 import 'screens/auth_screens/register_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/user_management/user_list_screen.dart';
 import 'screens/image_capture_screen.dart';
+import 'services/auth_services/auth_provider.dart';
 import 'services/config.dart';
+import 'services/deteccion_services/analysis_provider.dart';
+import 'services/images/images_provider.dart';
+import 'services/user_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inicializar la configuración
+  // Initialize configuration
   await AppConfig.initializeConfig();
-  debugPrint('API URL configurada: ${AppConfig.getApiUrl()}');
+  debugPrint('API URL configured: ${AppConfig.getApiUrl()}');
 
   runApp(
     MultiProvider(
@@ -33,9 +34,11 @@ void main() async {
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => AnalysisProvider()),
         ChangeNotifierProvider(create: (_) => ServerImageProvider()),
+        // Add the central product data provider
+        ChangeNotifierProvider(create: (_) => ProductDataProvider()),
         ChangeNotifierProvider(create: (_) => InventoryComparisonProvider()),
         ChangeNotifierProvider(create: (_) => InventoryReportProvider()),
-        ChangeNotifierProvider(create: (_) => AnalyticsProvider()), // Nuevo provider para análisis
+        ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
       ],
       child: const MyApp(),
     ),
@@ -57,7 +60,7 @@ class MyApp extends StatelessWidget {
       ),
       home: Consumer<AuthProvider>(
         builder: (ctx, auth, _) {
-          // Inicializar auth si aún no se ha hecho
+          // Initialize auth if not yet done
           if (!auth.isInitialized) {
             Future.microtask(() => auth.initializeAuth());
             return const Scaffold(
@@ -67,12 +70,26 @@ class MyApp extends StatelessWidget {
             );
           }
 
-          // Si el usuario está autenticado, mostrar la pantalla principal
+          // Set auth token in other providers when authenticated
+          if (auth.isAuthenticated && auth.token != null) {
+            // Initialize providers with auth token
+            Provider.of<InventoryComparisonProvider>(context, listen: false)
+                .setAuthToken(auth.token!);
+            Provider.of<InventoryReportProvider>(context, listen: false)
+                .setAuthToken(auth.token!);
+            Provider.of<AnalyticsProvider>(context, listen: false)
+                .setAuthToken(auth.token!);
+            // Initialize the product data provider with auth token
+            Provider.of<ProductDataProvider>(context, listen: false)
+                .setAuthToken(auth.token!);
+          }
+
+          // Show home screen if authenticated, login screen otherwise
           if (auth.isAuthenticated) {
             return const HomeScreen();
           }
 
-          // Si no está autenticado, mostrar la pantalla de inicio de sesión
+          // If not authenticated, show the login screen
           return const LoginScreen();
         },
       ),

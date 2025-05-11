@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
 import '../entity/inventory_report.dart';
 import '../entity/inventory_snapshot.dart';
-import 'inventory_report_sevices.dart';
+import '../../services/config.dart';
 
 class InventoryReportProvider with ChangeNotifier {
-  final InventoryReportService _reportService = InventoryReportService();
+  final _baseUrl = '${AppConfig.getApiUrl()}/inventory/api';
+  String? _authToken;
 
   List<InventoryReport> _reports = [];
   Map<String, ProductReplenishmentInfo> _priorityProducts = {};
@@ -13,27 +17,54 @@ class InventoryReportProvider with ChangeNotifier {
 
   // Getters
   List<InventoryReport> get reports => _reports;
-  Map<String, ProductReplenishmentInfo> get priorityProducts => _priorityProducts;
+
+  Map<String, ProductReplenishmentInfo> get priorityProducts =>
+      _priorityProducts;
+
   bool get isLoading => _isLoading;
+
   String get errorMessage => _errorMessage;
 
-  /// Carga los informes de inventario para un centro específico
+  /// Sets the authentication token to use for API requests
+  void setAuthToken(String token) {
+    _authToken = token;
+  }
+
+  /// Load inventory reports for a specific center
   Future<void> loadReports(int centerId) async {
     _isLoading = true;
     _errorMessage = '';
     notifyListeners();
 
     try {
-      _reports = await _reportService.getReports(centerId);
+      // Load reports
+      final url = Uri.parse('$_baseUrl/reports/by_center/?center_id=$centerId');
 
-      // Ordenar por fecha de creación (más recientes primero)
-      _reports.sort((a, b) =>
-          DateTime.parse(b.createdAt).compareTo(DateTime.parse(a.createdAt))
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
       );
 
-      // Cargar también los productos prioritarios
-      _priorityProducts = await _reportService.getPriorityProducts(centerId);
+      if (response.statusCode == 200) {
+        final List<dynamic> reportsJson = json.decode(response.body);
 
+        _reports =
+            reportsJson.map((json) => InventoryReport.fromJson(json)).toList();
+
+        // Sort by creation date (most recent first)
+        _reports.sort((a, b) =>
+            DateTime.parse(b.createdAt).compareTo(DateTime.parse(a.createdAt))
+        );
+
+        // Also load priority products
+        await _loadPriorityProducts(centerId);
+      } else {
+        _errorMessage = 'Error al cargar informes: ${response.statusCode}';
+        debugPrint(_errorMessage);
+      }
     } catch (e) {
       _errorMessage = 'Error al cargar informes de inventario: $e';
       debugPrint(_errorMessage);
@@ -43,26 +74,75 @@ class InventoryReportProvider with ChangeNotifier {
     }
   }
 
-  /// Genera un informe de reposición basado en el inventario actual
-  Future<InventoryReport?> generateReport(
-      InventorySnapshot currentInventory,
-      {bool isEmergency = false, Map<String, int>? customIdealCounts}
-      ) async {
+  /// Load priority products for a center
+  Future<void> _loadPriorityProducts(int centerId) async {
+    try {
+      final url = Uri.parse(
+          '$_baseUrl/reports/priority_products/?center_id=$centerId');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> productsJson = json.decode(response.body);
+
+        _priorityProducts = {};
+        productsJson.forEach((key, value) {
+          _priorityProducts[key] = ProductReplenishmentInfo.fromJson(value);
+        });
+      } else {
+        debugPrint(
+            'Error al cargar productos prioritarios: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error al cargar productos prioritarios: $e');
+    }
+  }
+
+  /// Generate a report based on current inventory
+  Future<InventoryReport?> generateReport(InventorySnapshot currentInventory,
+      {bool isEmergency = false, Map<String, int>? customIdealCounts}) async {
     _isLoading = true;
     _errorMessage = '';
     notifyListeners();
 
     try {
-      final report = await _reportService.generateReplenishmentReport(
-        currentInventory,
-        isEmergency: isEmergency,
-        customIdealCounts: customIdealCounts,
+      // Prepare data for API
+      final data = {
+        'snapshot_id': currentInventory.id,
+        'is_emergency': isEmergency,
+        if (customIdealCounts != null) 'custom_ideal_counts': customIdealCounts,
+      };
+
+      final url = Uri.parse('$_baseUrl/reports/generate/');
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
+        body: json.encode(data),
       );
 
-      // Recargar los informes para incluir el nuevo
-      await loadReports(currentInventory.centerId);
+      if (response.statusCode == 200) {
+        final reportJson = json.decode(response.body);
+        final report = InventoryReport.fromJson(reportJson);
 
-      return report;
+        // Reload reports to include the new one
+        await loadReports(currentInventory.centerId);
+
+        return report;
+      } else {
+        _errorMessage = 'Error al generar informe: ${response.statusCode}';
+        debugPrint(_errorMessage);
+        return null;
+      }
     } catch (e) {
       _errorMessage = 'Error al generar informe: $e';
       debugPrint(_errorMessage);
@@ -73,23 +153,34 @@ class InventoryReportProvider with ChangeNotifier {
     }
   }
 
-  /// Elimina un informe
+  /// Delete a report
   Future<bool> deleteReport(int centerId, String reportId) async {
     _isLoading = true;
     _errorMessage = '';
     notifyListeners();
 
     try {
-      final success = await _reportService.deleteReport(centerId, reportId);
+      final url = Uri.parse('$_baseUrl/reports/$reportId/');
 
-      if (success) {
-        // Actualizar la lista local
+      final response = await http.delete(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
+      );
+
+      if (response.statusCode == 204) {
+        // Update local list
         _reports.removeWhere((report) => report.id == reportId);
+        notifyListeners();
+        return true;
       } else {
-        _errorMessage = 'No se pudo eliminar el informe';
+        _errorMessage =
+        'No se pudo eliminar el informe: ${response.statusCode}';
+        notifyListeners();
+        return false;
       }
-
-      return success;
     } catch (e) {
       _errorMessage = 'Error al eliminar informe: $e';
       debugPrint(_errorMessage);
@@ -100,14 +191,38 @@ class InventoryReportProvider with ChangeNotifier {
     }
   }
 
-  /// Obtiene información de productos por categoría específica
-  Future<List<ProductReplenishmentInfo>> getProductsByCategory(int centerId, String category) async {
+  /// Fetch products by category
+  Future<List<ProductReplenishmentInfo>> getProductsByCategory(int centerId,
+      String category) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final products = await _reportService.getProductsByCategory(centerId, category);
-      return products;
+      final url = Uri.parse(
+          '$_baseUrl/reports/by_category/?center_id=$centerId&category=$category');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> productsJson = json.decode(response.body);
+
+        final products = productsJson
+            .map((json) => ProductReplenishmentInfo.fromJson(json))
+            .toList();
+
+        return products;
+      } else {
+        _errorMessage =
+        'Error al obtener productos por categoría: ${response.statusCode}';
+        debugPrint(_errorMessage);
+        return [];
+      }
     } catch (e) {
       _errorMessage = 'Error al obtener productos por categoría: $e';
       debugPrint(_errorMessage);
@@ -118,19 +233,19 @@ class InventoryReportProvider with ChangeNotifier {
     }
   }
 
-  /// Actualiza la lista de productos prioritarios
+  /// Update priority products
   Future<void> updatePriorityProducts(int centerId) async {
     try {
-      _priorityProducts = await _reportService.getPriorityProducts(centerId);
+      await _loadPriorityProducts(centerId);
       notifyListeners();
     } catch (e) {
       debugPrint('Error al actualizar productos prioritarios: $e');
     }
   }
 
-  /// Obtiene el informe más reciente
+  /// Get the latest report
   InventoryReport? getLatestReport() {
     if (_reports.isEmpty) return null;
-    return _reports.first; // Ya están ordenados por fecha
+    return _reports.first; // Already sorted by date
   }
 }

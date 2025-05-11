@@ -1,11 +1,12 @@
-/// Modelo para representar un informe de inventario con recomendaciones
+/// Model to represent an inventory report with replenishment recommendations
 class InventoryReport {
   final String id;
   final String name;
   final String createdAt;
   final int centerId;
   final Map<String, ProductReplenishmentInfo> productRecommendations;
-  final bool isEmergency; // Indica si es un informe para situaciones de emergencia
+  final bool isEmergency; // Indicates if this is an emergency report
+  final String? sourceSnapshotId; // ID of the snapshot used to generate this report
 
   InventoryReport({
     required this.id,
@@ -14,52 +15,55 @@ class InventoryReport {
     required this.centerId,
     required this.productRecommendations,
     this.isEmergency = false,
+    this.sourceSnapshotId,
   });
 
-  /// Crea una instancia desde un mapa JSON
+  /// Creates an instance from a JSON map
   factory InventoryReport.fromJson(Map<String, dynamic> json) {
     final Map<String, ProductReplenishmentInfo> recommendations = {};
 
-    if (json['productRecommendations'] != null) {
-      final Map<String, dynamic> recommendationsMap =
-      Map<String, dynamic>.from(json['productRecommendations']);
+    if (json['recommendations'] != null) {
+      final List<dynamic> recsList = json['recommendations'];
 
-      recommendationsMap.forEach((key, value) {
-        recommendations[key] = ProductReplenishmentInfo.fromJson(value);
-      });
+      for (var rec in recsList) {
+        // Use category name as the key
+        final categoryName = rec['category_name'] as String;
+        recommendations[categoryName] = ProductReplenishmentInfo.fromJson(rec);
+      }
     }
 
     return InventoryReport(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
-      createdAt: json['createdAt'] ?? '',
-      centerId: json['centerId'] is int
-          ? json['centerId']
-          : int.tryParse(json['centerId'].toString()) ?? 0,
+      createdAt: json['created_at'] ?? '',
+      centerId: json['center'] is int
+          ? json['center']
+          : int.tryParse(json['center'].toString()) ?? 0,
       productRecommendations: recommendations,
-      isEmergency: json['isEmergency'] ?? false,
+      isEmergency: json['is_emergency'] ?? false,
+      sourceSnapshotId: json['source_snapshot'],
     );
   }
 
-  /// Convierte la instancia a un mapa JSON
+  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> recommendationsMap = {};
-
+    final List<Map<String, dynamic>> recsList = [];
     productRecommendations.forEach((key, value) {
-      recommendationsMap[key] = value.toJson();
+      recsList.add(value.toJson());
     });
 
     return {
       'id': id,
       'name': name,
-      'createdAt': createdAt,
-      'centerId': centerId,
-      'productRecommendations': recommendationsMap,
-      'isEmergency': isEmergency,
+      'created_at': createdAt,
+      'center': centerId,
+      'recommendations': recsList,
+      'is_emergency': isEmergency,
+      'source_snapshot': sourceSnapshotId,
     };
   }
 
-  /// Formatea la fecha de creación
+  /// Formats the creation date for display
   String getFormattedDate() {
     try {
       final date = DateTime.parse(createdAt);
@@ -69,7 +73,7 @@ class InventoryReport {
     }
   }
 
-  /// Obtiene los productos prioritarios (con prioridad > 3)
+  /// Gets priority products (with priority > 3)
   Map<String, ProductReplenishmentInfo> getPriorityProducts() {
     return Map.fromEntries(
         productRecommendations.entries
@@ -77,16 +81,16 @@ class InventoryReport {
     );
   }
 
-  /// Obtiene las recomendaciones agrupadas por nivel de prioridad
+  /// Gets recommendations grouped by priority level
   Map<int, List<MapEntry<String, ProductReplenishmentInfo>>> getRecommendationsByPriority() {
     final Map<int, List<MapEntry<String, ProductReplenishmentInfo>>> result = {};
 
-    // Inicializar las listas para cada nivel de prioridad (1-5)
+    // Initialize lists for each priority level (1-5)
     for (int i = 1; i <= 5; i++) {
       result[i] = [];
     }
 
-    // Agrupar las recomendaciones por nivel de prioridad
+    // Group recommendations by priority level
     productRecommendations.entries.forEach((entry) {
       final priority = entry.value.priority;
       result[priority]!.add(entry);
@@ -96,13 +100,14 @@ class InventoryReport {
   }
 }
 
-/// Información de reposición de un producto
+/// Information about product replenishment
 class ProductReplenishmentInfo {
   final String category;
   final int currentCount;
   final int idealCount;
-  final int priority; // 1-5 donde 5 es la máxima prioridad
+  final int priority; // 1-5 where 5 is the highest priority
   final String note;
+  final int? categoryId; // ID of the category in the database
 
   ProductReplenishmentInfo({
     required this.category,
@@ -110,34 +115,37 @@ class ProductReplenishmentInfo {
     required this.idealCount,
     required this.priority,
     this.note = '',
+    this.categoryId,
   });
 
-  /// Crea una instancia desde un mapa JSON
+  /// Creates an instance from a JSON map
   factory ProductReplenishmentInfo.fromJson(Map<String, dynamic> json) {
     return ProductReplenishmentInfo(
-      category: json['category'] ?? '',
-      currentCount: json['currentCount'] ?? 0,
-      idealCount: json['idealCount'] ?? 0,
+      category: json['category_name'] ?? '',
+      currentCount: json['current_count'] ?? 0,
+      idealCount: json['ideal_count'] ?? 0,
       priority: json['priority'] ?? 1,
       note: json['note'] ?? '',
+      categoryId: json['category'],
     );
   }
 
-  /// Convierte la instancia a un mapa JSON
+  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
     return {
-      'category': category,
-      'currentCount': currentCount,
-      'idealCount': idealCount,
+      'category': categoryId,
+      'category_name': category,
+      'current_count': currentCount,
+      'ideal_count': idealCount,
       'priority': priority,
       'note': note,
     };
   }
 
-  /// Calcula la cantidad a reponer
-  int get replenishAmount => idealCount - currentCount;
+  /// Calculates how many items to replenish
+  int get replenishAmount => idealCount > currentCount ? idealCount - currentCount : 0;
 
-  /// Calcula el porcentaje faltante
+  /// Calculates percentage missing
   double get percentageMissing {
     if (idealCount == 0) return 0.0;
     return (replenishAmount / idealCount) * 100;

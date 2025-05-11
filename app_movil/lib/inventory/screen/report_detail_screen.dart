@@ -25,7 +25,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
 
-    // Seleccionar la primera categoría por defecto
+    // Select the first category by default
     if (widget.report.categories.isNotEmpty) {
       _selectedCategory = widget.report.categories.first;
     }
@@ -64,7 +64,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
   }
 
   Widget _buildSummaryTab() {
-    // Obtener estadísticas del reporte
+    // Get report statistics
     final totalCategories = widget.report.categories.length;
     final maxConsumptionCategory = widget.report.getMostConsumedCategory();
     final minConsumptionCategory = widget.report.getLeastConsumedCategory();
@@ -72,12 +72,16 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
     final averageDailyConsumption = widget.report.getAverageDailyConsumption();
     final peakConsumptionDays = widget.report.getPeakConsumptionDays();
 
+    // Get period type as enum for comparison
+    final periodTypeEnum = widget.report.getPeriodTypeEnum();
+    final color = periodTypeEnum == PeriodType.weekly ? Colors.blue : Colors.green;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Tarjeta de resumen
+          // Summary card
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -96,13 +100,11 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: widget.report.periodType == PeriodType.weekly
-                              ? Colors.blue
-                              : Colors.green,
+                          color: color,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          widget.report.periodType == PeriodType.weekly
+                          periodTypeEnum == PeriodType.weekly
                               ? 'ANÁLISIS SEMANAL'
                               : 'ANÁLISIS MENSUAL',
                           style: const TextStyle(
@@ -140,7 +142,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   ),
                   const SizedBox(height: 16),
 
-                  // Estadísticas principales
+                  // Main statistics
                   _buildInfoRow(
                     'Categorías analizadas:',
                     totalCategories.toString(),
@@ -154,7 +156,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   _buildInfoRow(
                     'Mayor consumo:',
                     maxConsumptionCategory != 'N/A'
-                        ? '$maxConsumptionCategory (${widget.report.totalConsumption[maxConsumptionCategory] ?? 0} unidades)'
+                        ? maxConsumptionCategory
                         : 'N/A',
                     Icons.trending_up,
                     valueColor: Colors.green,
@@ -162,7 +164,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   _buildInfoRow(
                     'Menor consumo:',
                     minConsumptionCategory != 'N/A'
-                        ? '$minConsumptionCategory (${widget.report.totalConsumption[minConsumptionCategory] ?? 0} unidades)'
+                        ? minConsumptionCategory
                         : 'N/A',
                     Icons.trending_down,
                     valueColor: Colors.orange,
@@ -174,7 +176,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           const SizedBox(height: 24),
 
-          // Tabla de consumo por categoría
+          // Consumption by category table
           const Text(
             'Consumo por Categoría',
             style: TextStyle(
@@ -192,7 +194,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Encabezado de la tabla
+                  // Table header
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8.0),
                     child: Row(
@@ -229,7 +231,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                         Expanded(
                           flex: 2,
                           child: Text(
-                            widget.report.periodType == PeriodType.weekly
+                            periodTypeEnum == PeriodType.weekly
                                 ? 'Pico'
                                 : 'Semanal',
                             style: const TextStyle(
@@ -243,7 +245,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   ),
                   const Divider(),
 
-                  // Filas de la tabla
+                  // Table rows
                   ...widget.report.categories.map((category) {
                     final consumption = widget.report.totalConsumption[category] ?? 0;
                     final dailyAvg = averageDailyConsumption[category]?.toStringAsFixed(1) ?? '0';
@@ -279,7 +281,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                           Expanded(
                             flex: 2,
                             child: Text(
-                              widget.report.periodType == PeriodType.weekly
+                              periodTypeEnum == PeriodType.weekly
                                   ? peakDay
                                   : (double.parse(dailyAvg) * 7).toStringAsFixed(1),
                               textAlign: TextAlign.center,
@@ -296,7 +298,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           const SizedBox(height: 24),
 
-          // Recomendaciones basadas en el análisis
+          // Recommendations based on analysis
           const Text(
             'Insights y Recomendaciones',
             style: TextStyle(
@@ -324,7 +326,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                     ),
                     const SizedBox(height: 16),
                   ],
-                  if (minConsumptionCategory != 'N/A' && widget.report.totalConsumption[minConsumptionCategory] != 0) ...[
+                  if (minConsumptionCategory != 'N/A' &&
+                      widget.report.totalConsumption[minConsumptionCategory.split(' ').first] != 0) ...[
                     _buildInsightItem(
                       Icons.trending_down,
                       Colors.orange,
@@ -334,7 +337,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                     const SizedBox(height: 16),
                   ],
 
-                  // Tendencia general
+                  // General trend
                   _buildInsightItem(
                     Icons.insights,
                     Colors.blue,
@@ -428,7 +431,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Selector de categoría
+          // Category selector
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -494,7 +497,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           const SizedBox(height: 24),
 
-          // Gráfico de barras para consumo total
+          // Bar chart for total consumption
           const Text(
             'Consumo Total por Categoría',
             style: TextStyle(
@@ -507,7 +510,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           const SizedBox(height: 24),
 
-          // Gráfico de línea para consumo a lo largo del tiempo
+          // Line chart for consumption over time
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -518,7 +521,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              // Switch para mostrar promedio
+              // Switch to show average
               Row(
                 children: [
                   const Text('Mostrar promedio'),
@@ -544,17 +547,16 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
   }
 
   Widget _buildTotalConsumptionChart() {
-    // Obtener los datos para el gráfico
+    // Get data for the chart
     final categories = widget.report.categories;
     final consumptionData = categories.map((category) {
       return widget.report.totalConsumption[category] ?? 0;
     }).toList();
 
-    // Calcular el valor máximo para el eje Y
-    // Asegurarse de que maxY sea al menos 5 para evitar que horizontalInterval sea 0
+    // Calculate max Y value (ensure it's at least 5 to avoid a horizontal interval of 0)
     final maxY = consumptionData.isEmpty ? 10 : Math.max(5, (consumptionData.reduce((a, b) => a > b ? a : b) * 1.2).ceil());
 
-    // Calcular el intervalo horizontal y asegurarse de que no sea cero
+    // Calculate horizontal interval (ensure it's not zero)
     final horizontalInterval = Math.max(1.0, maxY / 5);
 
     return SizedBox(
@@ -663,7 +665,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
               ),
               gridData: FlGridData(
                 show: true,
-                horizontalInterval: horizontalInterval, // Usar el valor calculado y validado
+                horizontalInterval: horizontalInterval, // Use calculated and validated value
                 drawVerticalLine: false,
                 getDrawingHorizontalLine: (value) {
                   return FlLine(
@@ -680,7 +682,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
   }
 
   Widget _buildDetailedConsumptionChart() {
-    // Obtener los datos para el gráfico
+    // Get data for the chart
     final dataPoints = widget.report.consumptionData[_selectedCategory] ?? [];
 
     if (dataPoints.isEmpty) {
@@ -694,19 +696,18 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
       );
     }
 
-    // Ordenar los puntos por fecha
+    // Sort points by date
     dataPoints.sort((a, b) => a.getDateTime().compareTo(b.getDateTime()));
 
-    // Calcular el valor máximo para el eje Y
-    // Asegurarse de que maxY sea al menos 5 para evitar que horizontalInterval sea 0
+    // Calculate max Y value (ensure it's at least 5 to avoid a horizontal interval of 0)
     final maxY = dataPoints.isEmpty
         ? 10
         : Math.max(5, (dataPoints.map((p) => p.count).reduce((a, b) => a > b ? a : b) * 1.2).ceil());
 
-    // Calcular el intervalo horizontal y asegurarse de que no sea cero
+    // Calculate horizontal interval (ensure it's not zero)
     final horizontalInterval = Math.max(1.0, maxY / 5);
 
-    // Calcular el promedio diario
+    // Calculate average daily consumption
     final averageConsumption = dataPoints.isEmpty
         ? 0.0
         : dataPoints.map((p) => p.count).reduce((a, b) => a + b) / dataPoints.length;
@@ -796,7 +797,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
               borderData: FlBorderData(show: false),
               gridData: FlGridData(
                 show: true,
-                horizontalInterval: horizontalInterval, // Usar el valor calculado y validado
+                horizontalInterval: horizontalInterval, // Use calculated and validated value
                 drawVerticalLine: false,
                 getDrawingHorizontalLine: (value) {
                   return FlLine(
@@ -810,7 +811,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
               minY: 0,
               maxY: maxY.toDouble(),
               lineBarsData: [
-                // Línea de consumo
+                // Consumption line
                 LineChartBarData(
                   spots: List.generate(
                     dataPoints.length,
@@ -829,7 +830,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                     color: Colors.blue.withOpacity(0.2),
                   ),
                 ),
-                // Línea de promedio (opcional)
+                // Average line (optional)
                 if (_showAverage)
                   LineChartBarData(
                     spots: List.generate(

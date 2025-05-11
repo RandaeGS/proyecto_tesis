@@ -6,6 +6,10 @@ import '../inventory/screen/analytics_screen.dart';
 import '../inventory/screen/inventory_report_screen.dart';
 import '../inventory/screen/inventory_snapshot_screen.dart';
 import '../inventory/screen/manual_inventory_screen.dart';
+import '../inventory/services/analytics_provider.dart';
+import '../inventory/services/inventory_comparison_provider.dart';
+import '../inventory/services/inventory_report_provider.dart';
+import '../inventory/services/product_data_provider.dart';
 import '../services/auth_services/auth_provider.dart';
 import '../services/deteccion_services/image_analisys_service.dart';
 import '../services/user_provider.dart';
@@ -35,7 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Cargar información del centro desde el backend
   Future<void> _loadCenterInfo() async {
     setState(() {
       _isLoading = true;
@@ -61,6 +64,51 @@ class _HomeScreenState extends State<HomeScreen> {
 
             debugPrint('Información del centro actualizada: ${userProvider.currentCenter!.name}');
           }
+        }
+      }
+
+      // Asegurarnos de tener token configurado en todos los providers
+      if (authProvider.isAuthenticated && authProvider.token != null) {
+        // Initialize providers with auth token
+        final token = authProvider.token!;
+        Provider.of<InventoryComparisonProvider>(context, listen: false)
+            .setAuthToken(token);
+        Provider.of<InventoryReportProvider>(context, listen: false)
+            .setAuthToken(token);
+        Provider.of<AnalyticsProvider>(context, listen: false)
+            .setAuthToken(token);
+        // Initialize the product data provider with auth token
+        Provider.of<ProductDataProvider>(context, listen: false)
+            .setAuthToken(token);
+      }
+
+      // NUEVO: Si tenemos ID de centro, inicializar el product data provider
+      if (authProvider.centerId != null) {
+        try {
+          debugPrint('Iniciando carga de datos del centro ${authProvider.centerId}');
+
+          // Initialize the product data provider first
+          final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
+          // Ensure it has auth token
+          if (authProvider.token != null) {
+            productDataProvider.setAuthToken(authProvider.token!);
+          }
+
+          // Load data sequentially to avoid conflicts
+          await productDataProvider.loadProductData(authProvider.centerId!);
+
+          // After product data is loaded, then load other data
+          final inventoryProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
+          inventoryProvider.setProductDataProvider(productDataProvider);
+          await inventoryProvider.loadInventorySnapshots(authProvider.centerId!);
+
+          // Finally load reports
+          await Provider.of<InventoryReportProvider>(context, listen: false)
+              .loadReports(authProvider.centerId!);
+
+          debugPrint('Datos del centro cargados correctamente');
+        } catch (e) {
+          debugPrint('Error loading provider data: $e');
         }
       }
     } catch (e) {

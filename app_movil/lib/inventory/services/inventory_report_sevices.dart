@@ -77,7 +77,7 @@ class InventoryReportService {
       if (currentCount <= 0) {
         note = 'URGENTE: No hay existencias';
       } else if (currentCount < idealCount * 0.25) {
-        note = 'Nivel crítico de existencias';
+        note = 'Nivel critico de existencias';
       } else if (currentCount < idealCount * 0.5) {
         note = 'Nivel bajo de existencias';
       }
@@ -97,7 +97,7 @@ class InventoryReportService {
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: isEmergency
           ? 'Informe de Emergencia ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}'
-          : 'Informe de Reposición ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
+          : 'Informe de Reposicion ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}',
       createdAt: DateTime.now().toString(),
       centerId: currentInventory.centerId,
       productRecommendations: recommendations,

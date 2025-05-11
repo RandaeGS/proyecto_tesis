@@ -8,6 +8,7 @@ import 'package:path/path.dart' as path;
 import '../entities/analisysresult.dart';
 import '../inventory/services/inventory_comparison_provider.dart';
 import '../inventory/services/inventory_sync_service.dart';
+import '../inventory/services/product_data_provider.dart';
 import '../services/auth_services/auth_provider.dart';
 import '../services/deteccion_services/analysis_provider.dart';
 import '../services/deteccion_services/confirmation_dialog.dart';
@@ -191,6 +192,10 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             // Recargar imágenes del centro
             await Provider.of<ServerImageProvider>(context, listen: false)
                 .loadCenterImages(_centerId!);
+
+            // NUEVO: Actualizar el product data provider con los resultados confirmados
+            await Provider.of<ProductDataProvider>(context, listen: false)
+                .loadProductData(_centerId!);
 
             // Cerrar diálogo de progreso
             if (mounted) {

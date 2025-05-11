@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../../services/auth_services/auth_provider.dart';
 import '../entity/inventory_report.dart';
 import '../entity/inventory_snapshot.dart';
@@ -24,57 +26,211 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
   late TabController _tabController;
   int? _centerId;
   bool _isLoading = true;
-  Map<String, int>? _customIdealCounts;
+  Map<String, int> _customIdealCounts = {};
   Map<String, TextEditingController> _idealCountControllers = {};
+  bool _configInitialized = false;
+  bool _reportsLoaded = false;
+  Set<String> _activeCategories = {};
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _initialize();
+    Future.microtask(() => _initialize());
   }
 
   @override
   void dispose() {
     _tabController.dispose();
-    _idealCountControllers.forEach((_, controller) => controller.dispose());
+    _clearControllers();
     super.dispose();
   }
 
+  void _clearControllers() {
+    _idealCountControllers.forEach((_, controller) => controller.dispose());
+    _idealCountControllers = {};
+  }
+
   Future<void> _initialize() async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (!mounted) return;
+
     setState(() {
-      _centerId = authProvider.centerId;
+      _isLoading = true;
     });
 
-    if (_centerId != null) {
-      // Cargar informes existentes
-      await Provider.of<InventoryReportProvider>(context, listen: false)
-          .loadReports(_centerId!);
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      _centerId = authProvider.centerId;
 
-      // Inicializar controladores para los campos de entrada
-      final reportProvider = Provider.of<InventoryReportProvider>(context, listen: false);
-      final latestReport = reportProvider.getLatestReport();
+      if (_centerId != null) {
+        try {
+          await Provider.of<InventoryReportProvider>(context, listen: false)
+              .loadReports(_centerId!);
+          _reportsLoaded = true;
+          _extractActiveCategoriesFromReports();
+        } catch (e) {
+          debugPrint('Error al cargar informes: $e');
+        }
 
-      if (latestReport != null) {
-        latestReport.productRecommendations.forEach((category, info) {
-          _idealCountControllers[category] = TextEditingController(
-            text: info.idealCount.toString(),
-          );
-        });
-      } else {
-        // Si no hay informes previos, usar valores predeterminados
-        InventoryReportService.defaultIdealCounts.forEach((category, count) {
-          _idealCountControllers[category] = TextEditingController(
-            text: count.toString(),
-          );
+        await _loadSavedConfiguration();
+        await _initializeControllers();
+      }
+    } catch (e) {
+      debugPrint('Error en inicialización: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
         });
       }
     }
+  }
 
-    setState(() {
-      _isLoading = false;
+  void _extractActiveCategoriesFromReports() {
+    try {
+      final reportProvider = Provider.of<InventoryReportProvider>(context, listen: false);
+      final reports = reportProvider.reports;
+
+      _activeCategories = {};
+
+      for (var report in reports) {
+        for (var category in report.productRecommendations.keys) {
+          _activeCategories.add(category);
+        }
+      }
+
+      debugPrint('Categorías activas encontradas en informes: $_activeCategories');
+
+      if (_activeCategories.isEmpty) {
+        _loadActiveCategoriesFromSnapshots();
+      }
+
+      if (_activeCategories.isEmpty) {
+        _activeCategories = InventoryReportService.defaultIdealCounts.keys.toSet();
+        debugPrint('Usando categorías predeterminadas: $_activeCategories');
+      }
+    } catch (e) {
+      debugPrint('Error al extraer categorías activas: $e');
+    }
+  }
+
+  Future<void> _loadActiveCategoriesFromSnapshots() async {
+    try {
+      if (_centerId == null) return;
+
+      final snapshotProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
+      await snapshotProvider.loadInventorySnapshots(_centerId!);
+
+      final snapshots = snapshotProvider.snapshots;
+
+      for (var snapshot in snapshots) {
+        for (var category in snapshot.productCounts.keys) {
+          _activeCategories.add(category);
+        }
+      }
+
+      debugPrint('Categorías activas encontradas en snapshots: $_activeCategories');
+    } catch (e) {
+      debugPrint('Error al cargar categorías desde snapshots: $e');
+    }
+  }
+
+  Future<void> _loadSavedConfiguration() async {
+    try {
+      if (_centerId == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final savedConfig = prefs.getString('ideal_counts_${_centerId}');
+
+      if (savedConfig != null && savedConfig.isNotEmpty) {
+        debugPrint('Cargando configuración guardada');
+        final Map<String, dynamic> savedMap = json.decode(savedConfig);
+
+        // Filtrar solo las categorías activas
+        final filteredConfig = savedMap.map(
+          (key, value) => MapEntry(key, value is int ? value : int.tryParse(value.toString()) ?? 0)
+        )..removeWhere((key, _) => !_activeCategories.contains(key));
+
+        _customIdealCounts = filteredConfig;
+        debugPrint('Configuración cargada (filtrada por categorías activas): $_customIdealCounts');
+      } else {
+        debugPrint('No se encontró configuración guardada');
+        _customIdealCounts = {};
+        for (var category in _activeCategories) {
+          _customIdealCounts[category] = InventoryReportService.defaultIdealCounts[category] ?? 0;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error al cargar configuración guardada: $e');
+    }
+  }
+
+  Future<void> _saveConfiguration() async {
+    try {
+      if (_centerId == null) return;
+
+      _updateCustomIdealCounts();
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('ideal_counts_${_centerId}', json.encode(_customIdealCounts));
+
+      debugPrint('Configuración guardada: $_customIdealCounts');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Configuración guardada correctamente'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error al guardar configuración: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al guardar configuración: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _initializeControllers() async {
+    _clearControllers();
+
+    try {
+      // Solo inicializar controladores para categorías activas
+      for (var category in _activeCategories) {
+        var value = _customIdealCounts[category] ?? 
+                   InventoryReportService.defaultIdealCounts[category] ?? 0;
+        
+        _customIdealCounts[category] = value;
+        _idealCountControllers[category] = TextEditingController(text: value.toString());
+      }
+
+      _configInitialized = true;
+
+      if (mounted) {
+        setState(() {});
+      }
+
+      debugPrint('Controladores inicializados para categorías: ${_idealCountControllers.keys}');
+    } catch (e) {
+      debugPrint('Error al inicializar controladores: $e');
+    }
+  }
+
+  void _updateCustomIdealCounts() {
+    final updatedCounts = <String, int>{};
+    _idealCountControllers.forEach((category, controller) {
+      final count = int.tryParse(controller.text);
+      if (count != null) {
+        updatedCounts[category] = count;
+      }
     });
+
+    _customIdealCounts = updatedCounts;
+    debugPrint('Configuración actualizada: $_customIdealCounts');
   }
 
   Future<void> _generateReport(bool isEmergency) async {
@@ -85,9 +241,11 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
       return;
     }
 
-    // Usar la instantánea seleccionada o la más reciente
-    final inventorySnapshot = widget.selectedSnapshot ??
-        await _getLatestSnapshot();
+    // Asegurarse de usar la configuración más reciente
+    _updateCustomIdealCounts();
+    await _saveConfiguration();
+
+    final inventorySnapshot = widget.selectedSnapshot ?? await _getLatestSnapshot();
 
     if (inventorySnapshot == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -99,30 +257,52 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
       return;
     }
 
-    // Recopilar valores personalizados para cantidades ideales
-    _customIdealCounts = {};
-    _idealCountControllers.forEach((category, controller) {
-      final count = int.tryParse(controller.text);
-      if (count != null) {
-        _customIdealCounts![category] = count;
-      }
+    setState(() {
+      _isLoading = true;
     });
 
-    // Generar el informe
-    final report = await Provider.of<InventoryReportProvider>(context, listen: false)
-        .generateReport(
-      inventorySnapshot,
-      isEmergency: isEmergency,
-      customIdealCounts: _customIdealCounts,
-    );
-
-    if (report != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Informe generado: ${report.name}'),
-          backgroundColor: Colors.green,
-        ),
+    try {
+      debugPrint('Generando informe con custom ideal counts: $_customIdealCounts');
+      final report = await Provider.of<InventoryReportProvider>(context, listen: false)
+          .generateReport(
+        inventorySnapshot,
+        isEmergency: isEmergency,
+        customIdealCounts: _customIdealCounts, // Usar configuración actualizada
       );
+
+      if (report != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Informe generado: ${report.name}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        try {
+          await Provider.of<InventoryReportProvider>(context, listen: false)
+              .loadReports(_centerId!);
+          _reportsLoaded = true;
+          _extractActiveCategoriesFromReports();
+          await _initializeControllers();
+        } catch (e) {
+          debugPrint('Error al recargar informes: $e');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al generar informe: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -130,14 +310,18 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
     final snapshotProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
 
     if (_centerId != null) {
-      await snapshotProvider.loadInventorySnapshots(_centerId!);
+      try {
+        await snapshotProvider.loadInventorySnapshots(_centerId!);
+      } catch (e) {
+        debugPrint('Error al cargar instantáneas: $e');
+      }
     }
 
     if (snapshotProvider.snapshots.isEmpty) {
       return null;
     }
 
-    return snapshotProvider.snapshots.first; // Ya están ordenados por fecha
+    return snapshotProvider.snapshots.first;
   }
 
   @override
@@ -154,6 +338,31 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
             Tab(text: 'Configuración'),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Recargar datos',
+            onPressed: _isLoading
+                ? null
+                : () async {
+              setState(() => _isLoading = true);
+              try {
+                _updateCustomIdealCounts();
+                if (_centerId != null) {
+                  await Provider.of<InventoryReportProvider>(context, listen: false)
+                      .loadReports(_centerId!);
+                  _reportsLoaded = true;
+                }
+              } catch (e) {
+                debugPrint('Error al recargar datos: $e');
+              } finally {
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                }
+              }
+            },
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -165,11 +374,11 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showGenerateReportDialog(),
-        backgroundColor: Colors.blue,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Generar informe', style: TextStyle(color: Colors.white)),
-      ),
+      onPressed: _isLoading ? null : _showGenerateReportDialog,
+    backgroundColor: Colors.blue,
+    icon: const Icon(Icons.add, color: Colors.white),
+    label: const Text('Generar informe', style: TextStyle(color: Colors.white)),
+    ),
     );
   }
 
@@ -248,7 +457,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton.icon(
-                  onPressed: () => _showGenerateReportDialog(),
+                  onPressed: _showGenerateReportDialog,
                   icon: const Icon(Icons.add),
                   label: const Text('Generar informe'),
                   style: ElevatedButton.styleFrom(
@@ -261,13 +470,11 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
           );
         }
 
-        // Mostrar lista de informes
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Sección de productos prioritarios
               if (provider.priorityProducts.isNotEmpty) ...[
                 Card(
                   elevation: 3,
@@ -305,8 +512,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
                           style: TextStyle(fontSize: 14),
                         ),
                         const SizedBox(height: 12),
-
-                        // Lista de productos prioritarios
                         ...provider.priorityProducts.entries.map((entry) {
                           final product = entry.value;
                           return Padding(
@@ -363,21 +568,21 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
                                 ],
                               ),
                               onTap: () {
-                                // Navegar a la pantalla de detalle de categoría
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => CategoryProductsScreen(
-                                      category: product.category,
-                                      centerId: _centerId!,
+                                if (_centerId != null) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => CategoryProductsScreen(
+                                        category: product.category,
+                                        centerId: _centerId!,
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                }
                               },
                             ),
                           );
                         }).toList(),
-
                         const SizedBox(height: 8),
                         Center(
                           child: TextButton.icon(
@@ -404,8 +609,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
                 ),
                 const SizedBox(height: 24),
               ],
-
-              // Título de informes recientes
               const Text(
                 'Informes Recientes',
                 style: TextStyle(
@@ -414,8 +617,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
                 ),
               ),
               const SizedBox(height: 16),
-
-              // Lista de informes
               ...provider.reports.map((report) => _buildReportCard(report)).toList(),
             ],
           ),
@@ -425,7 +626,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
   }
 
   Widget _buildReportCard(InventoryReport report) {
-    // Calcular estadísticas del informe
     int totalProducts = 0;
     int totalMissing = 0;
     int highPriorityCount = 0;
@@ -501,8 +701,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
                 ),
               ),
               const SizedBox(height: 12),
-
-              // Estadísticas
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -579,27 +777,106 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
           ),
           const SizedBox(height: 16),
 
-          // Campos para configurar cantidades ideales
-          ..._idealCountControllers.entries.map((entry) =>
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
-                child: TextFormField(
-                  controller: entry.value,
-                  decoration: InputDecoration(
-                    labelText: 'Cantidad ideal para ${entry.key}',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    suffixText: 'unidades',
-                  ),
-                  keyboardType: TextInputType.number,
+          if (!_configInitialized)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  "Cargando configuración...\nGenere un informe primero si no hay configuración disponible.",
+                  textAlign: TextAlign.center,
                 ),
               ),
-          ).toList(),
+            )
+          else if (_idealCountControllers.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                "No hay categorías configuradas. Se utilizarán valores predeterminados al generar informes.",
+                textAlign: TextAlign.center,
+              ),
+            )
+          else
+            ..._idealCountControllers.entries.map((entry) =>
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: entry.value,
+                          decoration: InputDecoration(
+                            labelText: 'Cantidad ideal para ${entry.key}',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            suffixText: 'unidades',
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _confirmDeleteCategory(entry.key),
+                        tooltip: 'Eliminar categoría',
+                      ),
+                    ],
+                  ),
+                ),
+            ).toList(),
 
           const SizedBox(height: 24),
 
-          // Sección de ayuda
+          if (_configInitialized)
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.blue.shade100),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Añadir nueva categoría',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: _showAddCategoryDialog,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Añadir categoría'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 24),
+
+          if (_configInitialized)
+            Center(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.save),
+                label: const Text('Guardar configuración'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                ),
+                onPressed: _saveConfiguration,
+              ),
+            ),
+
+          const SizedBox(height: 24),
+
           const Card(
             elevation: 1,
             child: Padding(
@@ -633,6 +910,124 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteCategory(String category) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar categoría'),
+        content: Text(
+          '¿Estás seguro de que deseas eliminar la categoría "$category"?\n\n'
+              'Esta acción no afectará a los informes existentes, pero la categoría no se incluirá en futuros informes.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && mounted) {
+      setState(() {
+        _idealCountControllers[category]?.dispose();
+        _idealCountControllers.remove(category);
+        _customIdealCounts.remove(category);
+      });
+      
+      // Guardar los cambios
+      await _saveConfiguration();
+    }
+  }
+
+  void _showAddCategoryDialog() {
+    final nameController = TextEditingController();
+    final countController = TextEditingController(text: '0');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Añadir nueva categoría'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Nombre de la categoría',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: countController,
+              decoration: const InputDecoration(
+                labelText: 'Cantidad ideal',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              nameController.dispose();
+              countController.dispose();
+            },
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = nameController.text.trim();
+              if (name.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('El nombre de la categoría no puede estar vacío'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              if (_idealCountControllers.containsKey(name)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Esta categoría ya existe'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              final count = int.tryParse(countController.text) ?? 0;
+
+              Navigator.of(context).pop();
+
+              setState(() {
+                _idealCountControllers[name] = TextEditingController(text: count.toString());
+                _customIdealCounts[name] = count;
+                _activeCategories.add(name);
+              });
+
+              _saveConfiguration();
+
+              nameController.dispose();
+              countController.dispose();
+            },
+            child: const Text('Añadir'),
           ),
         ],
       ),
@@ -687,25 +1082,35 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
-              'Eliminar',
-              style: TextStyle(color: Colors.red),
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
           ),
         ],
       ),
     );
 
     if (result == true && mounted && _centerId != null) {
-      await Provider.of<InventoryReportProvider>(
-        context,
-        listen: false,
-      ).deleteReport(_centerId!, report.id);
+      try {
+        await Provider.of<InventoryReportProvider>(
+          context,
+          listen: false,
+        ).deleteReport(_centerId!, report.id);
+      } catch (e) {
+        debugPrint('Error al eliminar informe: $e');
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al eliminar informe: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
   void _showReportDetails(InventoryReport report) {
-    // Organizar recomendaciones por nivel de prioridad
     final recommendationsByPriority = report.getRecommendationsByPriority();
 
     showModalBottomSheet(
@@ -726,7 +1131,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Encabezado
                 Center(
                   child: Container(
                     width: 40,
@@ -780,7 +1184,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
                 ),
                 const SizedBox(height: 24),
 
-                // Sección de recomendaciones por prioridad
                 for (int priority = 5; priority >= 1; priority--) ...[
                   if (recommendationsByPriority[priority]!.isNotEmpty) ...[
                     Row(
@@ -810,7 +1213,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
                     ),
                     const SizedBox(height: 8),
 
-                    // Lista de productos con esta prioridad
                     ...recommendationsByPriority[priority]!.map((entry) {
                       final product = entry.value;
                       return Card(
@@ -853,7 +1255,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
                   ],
                 ],
 
-                // Botón para ver todas las categorías
                 Center(
                   child: ElevatedButton.icon(
                     onPressed: () {

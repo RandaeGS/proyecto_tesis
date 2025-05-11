@@ -1,14 +1,28 @@
-/// Modelo para representar un reporte analítico de consumo de productos
+/// Model to represent an analytics report of product consumption
 class AnalyticsReport {
   final String id;
   final String name;
   final String createdAt;
   final int centerId;
-  final List<String> categories; // Categorías incluidas en el análisis
-  final DateRange dateRange; // Rango de fechas del análisis
-  final PeriodType periodType; // Tipo de período (semanal, mensual)
-  final Map<String, List<ConsumptionDataPoint>> consumptionData; // Datos de consumo por categoría
-  final Map<String, int> totalConsumption; // Consumo total por categoría en el período
+  final List<String> categories; // Categories included in the analysis
+  final DateRange dateRange; // Date range of the analysis
+  final String periodType; // Type of period (weekly, monthly)
+  final Map<String, List<ConsumptionDataPoint>> consumptionData; // Consumption data by category
+  final Map<String, int> totalConsumption; // Total consumption by category in the period
+  final String? startSnapshotId; // ID of the start snapshot
+  final String? endSnapshotId; // ID of the end snapshot
+
+  /// Converts PeriodType enum to string for storage
+  static String _periodTypeToString(PeriodType periodType) {
+    switch (periodType) {
+      case PeriodType.weekly:
+        return 'weekly';
+      case PeriodType.monthly:
+        return 'monthly';
+      default:
+        return 'weekly'; // Default to weekly
+    }
+  }
 
   AnalyticsReport({
     required this.id,
@@ -17,78 +31,146 @@ class AnalyticsReport {
     required this.centerId,
     required this.categories,
     required this.dateRange,
-    required this.periodType,
+    required PeriodType periodTypeEnum, // Accept enum, not string
     required this.consumptionData,
     required this.totalConsumption,
+    this.startSnapshotId,
+    this.endSnapshotId,
+  }) : this.periodType = _periodTypeToString(periodTypeEnum); // Convert enum to string in initializer
+
+  /// Alternative constructor directly with periodType as string
+  AnalyticsReport.withStringPeriodType({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+    required this.centerId,
+    required this.categories,
+    required this.dateRange,
+    required this.periodType, // Direct string
+    required this.consumptionData,
+    required this.totalConsumption,
+    this.startSnapshotId,
+    this.endSnapshotId,
   });
 
-  /// Crea una instancia desde un mapa JSON
+  /// Get the period type as enum
+  PeriodType getPeriodTypeEnum() {
+    switch (periodType.toLowerCase()) {
+      case 'weekly':
+        return PeriodType.weekly;
+      case 'monthly':
+        return PeriodType.monthly;
+      default:
+        return PeriodType.weekly; // Default
+    }
+  }
+
+  /// Creates an instance from a JSON map
   factory AnalyticsReport.fromJson(Map<String, dynamic> json) {
-    // Convertir mapa de datos de consumo
+    // Convert consumption data
     final Map<String, List<ConsumptionDataPoint>> consumption = {};
 
-    if (json['consumptionData'] != null) {
-      final consumptionMap = Map<String, dynamic>.from(json['consumptionData']);
+    if (json['data_points'] != null) {
+      final List<dynamic> dataPoints = json['data_points'];
 
-      consumptionMap.forEach((category, dataList) {
-        consumption[category] = (dataList as List).map((data) =>
-            ConsumptionDataPoint.fromJson(data)
-        ).toList();
+      // Group data points by category
+      final Map<String, List<dynamic>> pointsByCategory = {};
+      for (var point in dataPoints) {
+        final categoryName = point['category_name'] as String;
+        if (!pointsByCategory.containsKey(categoryName)) {
+          pointsByCategory[categoryName] = [];
+        }
+        pointsByCategory[categoryName]!.add(point);
+      }
+
+      // Convert to ConsumptionDataPoint objects
+      pointsByCategory.forEach((category, points) {
+        consumption[category] = points
+            .map((point) => ConsumptionDataPoint.fromJson(point))
+            .toList();
       });
     }
 
-    // Convertir consumo total
+    // Convert total consumption
     final Map<String, int> total = {};
 
-    if (json['totalConsumption'] != null) {
-      final totalMap = Map<String, dynamic>.from(json['totalConsumption']);
+    if (json['consumption_totals'] != null) {
+      final List<dynamic> totals = json['consumption_totals'];
 
-      totalMap.forEach((category, count) {
-        total[category] = count is int ? count : int.tryParse(count.toString()) ?? 0;
-      });
+      for (var item in totals) {
+        final categoryName = item['category_name'] as String;
+        final count = item['count'] as int;
+        total[categoryName] = count;
+      }
     }
 
-    return AnalyticsReport(
+    // Get date range
+    DateRange range;
+    if (json['date_range'] != null) {
+      range = DateRange.fromJson(json['date_range']);
+    } else {
+      // Create from start_date and end_date
+      range = DateRange(
+        startDate: json['start_date'] ?? '',
+        endDate: json['end_date'] ?? '',
+      );
+    }
+
+    // Use the alternative constructor with direct string period type
+    return AnalyticsReport.withStringPeriodType(
       id: json['id'] ?? '',
       name: json['name'] ?? '',
-      createdAt: json['createdAt'] ?? '',
-      centerId: json['centerId'] is int
-          ? json['centerId']
-          : int.tryParse(json['centerId'].toString()) ?? 0,
-      categories: List<String>.from(json['categories'] ?? []),
-      dateRange: DateRange.fromJson(json['dateRange'] ?? {}),
-      periodType: PeriodType.values.firstWhere(
-            (type) => type.toString() == json['periodType'],
-        orElse: () => PeriodType.weekly,
-      ),
+      createdAt: json['created_at'] ?? '',
+      centerId: json['center'] is int
+          ? json['center']
+          : int.tryParse(json['center'].toString()) ?? 0,
+      categories: json['categories'] != null
+          ? List<String>.from(json['categories'])
+          : [],
+      dateRange: range,
+      periodType: json['period_type'] ?? 'weekly', // Use string directly
       consumptionData: consumption,
       totalConsumption: total,
+      startSnapshotId: json['start_snapshot'],
+      endSnapshotId: json['end_snapshot'],
     );
   }
 
-  /// Convierte la instancia a un mapa JSON
+  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
-    // Convertir datos de consumo a formato JSON
-    final Map<String, List<Map<String, dynamic>>> consumptionJson = {};
+    // Convert consumption data to JSON format
+    final List<Map<String, dynamic>> dataPoints = [];
+    consumptionData.forEach((category, points) {
+      for (var point in points) {
+        dataPoints.add(point.toJson()..['category_name'] = category);
+      }
+    });
 
-    consumptionData.forEach((category, dataPoints) {
-      consumptionJson[category] = dataPoints.map((point) => point.toJson()).toList();
+    // Convert total consumption to JSON format
+    final List<Map<String, dynamic>> totals = [];
+    totalConsumption.forEach((category, count) {
+      totals.add({
+        'category_name': category,
+        'count': count,
+      });
     });
 
     return {
       'id': id,
       'name': name,
-      'createdAt': createdAt,
-      'centerId': centerId,
+      'created_at': createdAt,
+      'center': centerId,
       'categories': categories,
-      'dateRange': dateRange.toJson(),
-      'periodType': periodType.toString(),
-      'consumptionData': consumptionJson,
-      'totalConsumption': totalConsumption,
+      'date_range': dateRange.toJson(),
+      'period_type': periodType, // Store the string
+      'data_points': dataPoints,
+      'consumption_totals': totals,
+      'start_snapshot': startSnapshotId,
+      'end_snapshot': endSnapshotId,
     };
   }
 
-  /// Formatea la fecha de creación
+  /// Formats the creation date for display
   String getFormattedDate() {
     try {
       final date = DateTime.parse(createdAt);
@@ -98,25 +180,43 @@ class AnalyticsReport {
     }
   }
 
-  /// Obtiene la categoría con mayor consumo
+  /// Gets the category with the highest consumption
   String getMostConsumedCategory() {
     if (totalConsumption.isEmpty) return 'N/A';
 
-    return totalConsumption.entries
-        .reduce((a, b) => a.value > b.value ? a : b)
-        .key;
+    String maxCategory = totalConsumption.keys.first;
+    int maxValue = totalConsumption[maxCategory] ?? 0;
+
+    totalConsumption.forEach((category, count) {
+      if (count > maxValue) {
+        maxValue = count;
+        maxCategory = category;
+      }
+    });
+
+    if (maxValue == 0) return 'N/A';
+    return '$maxCategory ($maxValue)';
   }
 
-  /// Obtiene la categoría con menor consumo
+  /// Gets the category with the lowest consumption
   String getLeastConsumedCategory() {
     if (totalConsumption.isEmpty) return 'N/A';
 
-    return totalConsumption.entries
-        .reduce((a, b) => a.value < b.value ? a : b)
-        .key;
+    String minCategory = totalConsumption.keys.first;
+    int minValue = totalConsumption[minCategory] ?? 0;
+
+    totalConsumption.forEach((category, count) {
+      if (count < minValue) {
+        minValue = count;
+        minCategory = category;
+      }
+    });
+
+    if (minValue == 0) return 'N/A';
+    return '$minCategory ($minValue)';
   }
 
-  /// Calcula el consumo promedio diario por categoría
+  /// Calculates average daily consumption by category
   Map<String, double> getAverageDailyConsumption() {
     final days = dateRange.getDaysCount();
     if (days <= 0) return {};
@@ -130,16 +230,19 @@ class AnalyticsReport {
     return averages;
   }
 
-  /// Obtiene los días de mayor consumo por categoría
+  /// Gets the days with peak consumption by category
   Map<String, String> getPeakConsumptionDays() {
     final Map<String, String> peakDays = {};
 
     consumptionData.forEach((category, dataPoints) {
       if (dataPoints.isEmpty) return;
 
-      final peakPoint = dataPoints.reduce(
-              (a, b) => a.count > b.count ? a : b
-      );
+      ConsumptionDataPoint peakPoint = dataPoints.first;
+      for (var point in dataPoints) {
+        if (point.count > peakPoint.count) {
+          peakPoint = point;
+        }
+      }
 
       peakDays[category] = peakPoint.getFormattedDate();
     });
@@ -148,11 +251,11 @@ class AnalyticsReport {
   }
 }
 
-/// Punto de datos para análisis de consumo
+/// Data point for consumption analysis
 class ConsumptionDataPoint {
-  final String date; // Fecha del punto de datos (en formato ISO)
-  final int count; // Cantidad consumida
-  final String? note; // Nota opcional
+  final String date; // Date of the data point (in ISO format)
+  final int count; // Quantity consumed
+  final String? note; // Optional note
 
   ConsumptionDataPoint({
     required this.date,
@@ -160,7 +263,7 @@ class ConsumptionDataPoint {
     this.note,
   });
 
-  /// Crea una instancia desde un mapa JSON
+  /// Creates an instance from a JSON map
   factory ConsumptionDataPoint.fromJson(Map<String, dynamic> json) {
     return ConsumptionDataPoint(
       date: json['date'] ?? '',
@@ -171,7 +274,7 @@ class ConsumptionDataPoint {
     );
   }
 
-  /// Convierte la instancia a un mapa JSON
+  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
     return {
       'date': date,
@@ -180,7 +283,7 @@ class ConsumptionDataPoint {
     };
   }
 
-  /// Obtiene el objeto DateTime
+  /// Gets the DateTime object
   DateTime getDateTime() {
     try {
       return DateTime.parse(date);
@@ -189,7 +292,7 @@ class ConsumptionDataPoint {
     }
   }
 
-  /// Formatea la fecha de manera legible
+  /// Formats the date in a readable way
   String getFormattedDate() {
     try {
       final dateTime = DateTime.parse(date);
@@ -200,17 +303,17 @@ class ConsumptionDataPoint {
   }
 }
 
-/// Rango de fechas para análisis
+/// Date range for analysis
 class DateRange {
-  final String startDate; // Fecha de inicio en formato ISO
-  final String endDate; // Fecha de fin en formato ISO
+  final String startDate; // Start date in ISO format
+  final String endDate; // End date in ISO format
 
   DateRange({
     required this.startDate,
     required this.endDate,
   });
 
-  /// Crea una instancia desde un mapa JSON
+  /// Creates an instance from a JSON map
   factory DateRange.fromJson(Map<String, dynamic> json) {
     return DateRange(
       startDate: json['startDate'] ?? '',
@@ -218,7 +321,7 @@ class DateRange {
     );
   }
 
-  /// Convierte la instancia a un mapa JSON
+  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
     return {
       'startDate': startDate,
@@ -226,7 +329,7 @@ class DateRange {
     };
   }
 
-  /// Crea un rango para la última semana
+  /// Creates a range for the last week
   factory DateRange.lastWeek() {
     final now = DateTime.now();
     final endDate = now;
@@ -238,10 +341,11 @@ class DateRange {
     );
   }
 
-  /// Crea un rango para el último mes
+  /// Creates a range for the last month
   factory DateRange.lastMonth() {
     final now = DateTime.now();
     final endDate = now;
+    // Subtract one month (approximately)
     final startDate = DateTime(now.year, now.month - 1, now.day);
 
     return DateRange(
@@ -250,7 +354,7 @@ class DateRange {
     );
   }
 
-  /// Obtiene el objeto DateTime de inicio
+  /// Gets the start DateTime
   DateTime getStartDateTime() {
     try {
       return DateTime.parse(startDate);
@@ -259,7 +363,7 @@ class DateRange {
     }
   }
 
-  /// Obtiene el objeto DateTime de fin
+  /// Gets the end DateTime
   DateTime getEndDateTime() {
     try {
       return DateTime.parse(endDate);
@@ -268,7 +372,7 @@ class DateRange {
     }
   }
 
-  /// Calcula el número de días en el rango
+  /// Calculates the number of days in the range
   int getDaysCount() {
     try {
       final start = DateTime.parse(startDate);
@@ -280,7 +384,7 @@ class DateRange {
     }
   }
 
-  /// Formatea el rango de fechas como una cadena legible
+  /// Formats the date range as a readable string
   String getFormattedRange() {
     try {
       final start = DateTime.parse(startDate);
@@ -293,7 +397,7 @@ class DateRange {
   }
 }
 
-/// Tipo de período para análisis
+/// Period type for analysis
 enum PeriodType {
   weekly,
   monthly,

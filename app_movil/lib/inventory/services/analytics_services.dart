@@ -74,17 +74,19 @@ class AnalyticsService {
       endDate: endDate.toIso8601String(),
     );
 
-    // Crear el reporte
+    // Crear el reporte utilizando el nuevo constructor
     final report = AnalyticsReport(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: reportName ?? _generateReportName(periodType),
       createdAt: DateTime.now().toIso8601String(),
       centerId: centerId,
-      categories: categoriesToAnalyze.toList(), // Corregido: Usar categoriesToAnalyze en lugar de categoriesAnalyzed
+      categories: categoriesToAnalyze.toList(),
       dateRange: dateRange,
-      periodType: periodType,
+      periodTypeEnum: periodType, // Pasamos el enum directamente
       consumptionData: consumptionData,
       totalConsumption: consumption,
+      startSnapshotId: startSnapshot.id,
+      endSnapshotId: endSnapshot.id,
     );
 
     // Guardar el reporte
@@ -202,9 +204,9 @@ class AnalyticsService {
 
     switch (periodType) {
       case PeriodType.weekly:
-        return 'Análisis Semanal - $formattedDate';
+        return 'Analisis Semanal - $formattedDate';
       case PeriodType.monthly:
-        return 'Análisis Mensual - $formattedDate';
+        return 'Analisis Mensual - $formattedDate';
     }
   }
 

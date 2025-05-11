@@ -4,6 +4,7 @@ import '../entity/inventory_snapshot.dart';
 import '../services/inventory_comparison_provider.dart';
 import '../services/inventory_report_provider.dart';
 import '../services/inventory_report_sevices.dart';
+import '../services/product_data_provider.dart';
 
 class ManualInventoryManagementScreen extends StatefulWidget {
   final int centerId;
@@ -26,11 +27,13 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
   final _newCategoryController = TextEditingController();
   final _newCategoryCountController = TextEditingController();
   bool _hasChanges = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _loadInventoryData();
+    // Avoid calling setState during build
+    Future.microtask(() => _loadInventoryData());
   }
 
   @override
@@ -42,41 +45,68 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
   }
 
   Future<void> _loadInventoryData() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // Intentar cargar la instantánea más reciente
-      final snapshotProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
-      await snapshotProvider.loadInventorySnapshots(widget.centerId);
+      debugPrint("Loading inventory data for center: ${widget.centerId}");
 
-      if (snapshotProvider.snapshots.isNotEmpty) {
-        _currentSnapshot = snapshotProvider.snapshots.first; // La más reciente
-        _productCounts = Map.from(_currentSnapshot!.productCounts);
-      } else {
-        // Si no hay instantáneas, cargar categorías predeterminadas
-        _productCounts = Map.from(InventoryReportService.defaultIdealCounts);
-        _productCounts.forEach((key, value) => _productCounts[key] = 0); // Inicializar con 0
+      // First try to get data from the product data provider
+      final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
+
+      // Reload product data to ensure it's up to date
+      await productDataProvider.loadProductData(widget.centerId);
+
+      // Get the current product counts
+      _productCounts = Map.from(productDataProvider.currentProductCounts);
+      debugPrint("Loaded product counts from provider: $_productCounts");
+
+      // If counts are empty, try loading from the latest snapshot
+      if (_productCounts.isEmpty) {
+        debugPrint("Product counts empty, trying to load from latest snapshot");
+        // Load the latest snapshot
+        final snapshotProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
+        await snapshotProvider.loadInventorySnapshots(widget.centerId);
+
+        if (snapshotProvider.snapshots.isNotEmpty) {
+          _currentSnapshot = snapshotProvider.snapshots.first; // La más reciente
+          _productCounts = Map.from(_currentSnapshot!.productCounts);
+          debugPrint("Loaded product counts from snapshot: $_productCounts");
+        } else {
+          // Si no hay instantáneas, cargar categorías predeterminadas
+          debugPrint("No snapshots found, using default categories");
+          _productCounts = Map.from(InventoryReportService.defaultIdealCounts);
+          _productCounts.forEach((key, value) => _productCounts[key] = 0); // Inicializar con 0
+        }
       }
 
       // Inicializar los controladores para cada categoría
       _initializeControllers();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al cargar datos: $e')),
-      );
+      debugPrint("Error loading inventory data: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cargar datos: $e')),
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   void _initializeControllers() {
+    // Dispose old controllers first
     _editControllers.forEach((_, controller) => controller.dispose());
     _editControllers = {};
 
+    // Create new controllers for each category
     _productCounts.forEach((category, count) {
       _editControllers[category] = TextEditingController(text: count.toString());
       _editControllers[category]!.addListener(() {
@@ -88,59 +118,81 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
         }
       });
     });
+
+    debugPrint("Initialized ${_editControllers.length} controllers for categories");
   }
 
   Future<void> _saveInventory() async {
     if (!_formKey.currentState!.validate()) {
+      debugPrint("Form validation failed");
       return;
     }
 
     setState(() {
       _isLoading = true;
+      _isSaving = true;
     });
 
     try {
-      // Actualizar los valores desde los controladores
+      debugPrint("Saving inventory changes");
+
+      // Collect updated counts from controllers
       Map<String, int> updatedCounts = {};
       _editControllers.forEach((category, controller) {
         updatedCounts[category] = int.tryParse(controller.text) ?? 0;
       });
 
-      // Crear una nueva instantánea con los valores actualizados
+      debugPrint("Updated counts to save: $updatedCounts");
+
+      // Update the central product data provider
+      final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
+      productDataProvider.updateProductCounts(updatedCounts);
+
+      // Create a new snapshot with the updated values
       final snapshotProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
+      snapshotProvider.setProductDataProvider(productDataProvider);
+
       final snapshotName = 'Actualización Manual - ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
       final snapshotDesc = 'Actualización manual del inventario';
 
-      final success = await snapshotProvider.saveInventorySnapshot(
+      debugPrint("Creating new snapshot with name: $snapshotName");
+      final success = await snapshotProvider.saveSnapshotFromProductData(
         widget.centerId,
         snapshotName,
         snapshotDesc,
-        updatedCounts,
-        [], // No hay resultados de análisis de imágenes
       );
 
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Inventario actualizado correctamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        debugPrint("Snapshot created successfully");
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Inventario actualizado correctamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+
         setState(() {
           _hasChanges = false;
         });
 
-        // Recargar datos
-        await _loadInventoryData();
+        // Completely reload data to ensure UI is updated
+        await _fullReload();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo actualizar el inventario'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        debugPrint("Failed to create snapshot");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No se pudo actualizar el inventario'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
+      debugPrint("Error saving inventory: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al guardar: $e'),
@@ -150,7 +202,58 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
     } finally {
       setState(() {
         _isLoading = false;
+        _isSaving = false;
       });
+    }
+  }
+
+  // Complete reload of all data
+  Future<void> _fullReload() async {
+    debugPrint("Performing full reload of data");
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // First reload product data
+      final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
+      await productDataProvider.loadProductData(widget.centerId);
+
+      // Then reload inventory snapshots
+      final inventoryProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
+      await inventoryProvider.loadInventorySnapshots(widget.centerId);
+
+      // Then reload reports
+      try {
+        final reportProvider = Provider.of<InventoryReportProvider>(context, listen: false);
+        await reportProvider.loadReports(widget.centerId);
+      } catch (e) {
+        debugPrint('Error refreshing reports: $e');
+      }
+
+      // Get the updated counts
+      _productCounts = Map.from(productDataProvider.currentProductCounts);
+
+      // Reinitialize controllers
+      _initializeControllers();
+
+      debugPrint("Full reload completed, product counts: $_productCounts");
+    } catch (e) {
+      debugPrint("Error during full reload: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al recargar datos: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -282,6 +385,45 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
             tooltip: 'Ver historial',
             onPressed: _showSnapshotHistory,
           ),
+          // Botón para sincronizar con detecciones
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sincronizar con detecciones',
+            onPressed: () async {
+              setState(() {
+                _isLoading = true;
+              });
+
+              try {
+                await _fullReload();
+
+                // Notify user
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Datos sincronizados correctamente con las detecciones'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error al sincronizar datos: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              } finally {
+                setState(() {
+                  _isLoading = false;
+                });
+              }
+            },
+          ),
+          // Refresh button
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Recargar datos',
+            onPressed: _fullReload,
+          ),
         ],
       ),
       body: _isLoading
@@ -310,10 +452,20 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
                           ),
                         ),
                         const SizedBox(height: 4),
+                        Consumer<ProductDataProvider>(
+                          builder: (context, provider, child) {
+                            return Text(
+                              'Última actualización: ${_formatDateTime(provider.lastUpdated)}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 4),
                         Text(
-                          _currentSnapshot != null
-                              ? 'Última actualización: ${_currentSnapshot!.getFormattedDate()}'
-                              : 'No hay registros previos',
+                          'Categorías activas: ${_productCounts.length}',
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[600],
@@ -468,7 +620,9 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: ElevatedButton.icon(
+                    child: _isSaving
+                        ? const Center(child: CircularProgressIndicator())
+                        : ElevatedButton.icon(
                       onPressed: _hasChanges ? _saveInventory : null,
                       icon: const Icon(Icons.save),
                       label: const Text('Guardar Cambios'),
@@ -501,6 +655,11 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
 
     return Icons.inventory_2;
   }
+
+  // Format DateTime to a readable string
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
 }
 
 // Esta pantalla muestra el historial de instantáneas de inventario
@@ -517,6 +676,32 @@ class InventoryHistoryScreen extends StatefulWidget {
 }
 
 class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Load the snapshots when the screen opens
+      final provider = Provider.of<InventoryComparisonProvider>(context, listen: false);
+      await provider.loadInventorySnapshots(widget.centerId);
+    } catch (e) {
+      debugPrint("Error loading snapshot history: $e");
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -524,8 +709,17 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
         title: const Text('Historial de Inventario'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadData,
+            tooltip: 'Actualizar',
+          ),
+        ],
       ),
-      body: Consumer<InventoryComparisonProvider>(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Consumer<InventoryComparisonProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {
             return const Center(child: CircularProgressIndicator());

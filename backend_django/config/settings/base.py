@@ -113,6 +113,7 @@ LOCAL_APPS = [
     "backend_django.users",
     "center",
     "uploads",
+    "inventory",
     # Your stuff: custom apps go here
 ]
 

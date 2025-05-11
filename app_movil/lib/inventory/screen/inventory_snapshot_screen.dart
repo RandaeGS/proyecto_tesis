@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../services/auth_services/auth_provider.dart';
 import '../../../services/images/images_provider.dart';
 import '../services/inventory_comparison_provider.dart';
+import '../services/product_data_provider.dart';
 import 'inventory_comparison_screen.dart';
 
 class InventorySnapshotScreen extends StatefulWidget {
@@ -35,22 +36,43 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     setState(() {
       _centerId = authProvider.centerId;
-      _isLoading = false;
+      _isLoading = true; // Set loading state
     });
 
     if (_centerId != null) {
-      // Cargar instantáneas existentes
-      await Provider.of<InventoryComparisonProvider>(context, listen: false)
-          .loadInventorySnapshots(_centerId!);
+      try {
+        // Initialize the product data provider first
+        final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
+        await productDataProvider.loadProductData(_centerId!);
 
-      // Asegurar que tenemos las imágenes del centro cargadas
-      if (mounted) {
-        await Provider.of<ServerImageProvider>(context, listen: false)
-            .loadCenterImages(_centerId!);
+        // Link the product data provider to the inventory comparison provider
+        final inventoryProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
+        inventoryProvider.setProductDataProvider(productDataProvider);
+
+        // Load existing snapshots
+        await inventoryProvider.loadInventorySnapshots(_centerId!);
+
+        // Sync data with image provider
+        final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
+        await imageProvider.loadCenterImages(_centerId!);
+        await productDataProvider.syncWithImageProvider(imageProvider, _centerId!);
+      } catch (e) {
+        debugPrint('Error initializing data: $e');
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false; // Set loading state to false
+          });
+        }
       }
+    } else {
+      setState(() {
+        _isLoading = false; // Set loading state to false
+      });
     }
   }
 
+// Update the _createSnapshot method to ensure consistent data
   Future<void> _createSnapshot() async {
     if (_centerId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,24 +92,21 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Use the product data provider to create the snapshot
+      final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
+
+      // First make sure we have the latest data
+      await productDataProvider.loadProductData(_centerId!);
+
+      // Update from image detections
       final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
+      await productDataProvider.syncWithImageProvider(imageProvider, _centerId!);
 
-      // Obtener conteo actual de productos (solo productos confirmados)
-      final productCounts = imageProvider.getProductCounts(onlyConfirmed: true);
-
-      // Obtener detecciones confirmadas como fuente para este snapshot
-      final sourceResults = imageProvider.confirmedCenterDetections;
-
-      // Guardar la instantánea
-      final success = await Provider.of<InventoryComparisonProvider>(
-          context,
-          listen: false
-      ).saveInventorySnapshot(
+      // Create the snapshot directly using the ProductDataProvider
+      final success = await productDataProvider.createInventorySnapshot(
         _centerId!,
         _snapshotNameController.text,
         _snapshotDescriptionController.text,
-        productCounts,
-        sourceResults,
       );
 
       if (mounted) {
@@ -101,6 +120,12 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
             backgroundColor: success ? Colors.green : Colors.red,
           ),
         );
+
+        // Reload the snapshots
+        if (success) {
+          final inventoryProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
+          await inventoryProvider.loadInventorySnapshots(_centerId!);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -184,6 +209,10 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: () async {
               if (_centerId != null) {
+                // Refresh all data in the correct order
+                final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
+                await productDataProvider.loadProductData(_centerId!);
+
                 await Provider.of<InventoryComparisonProvider>(
                   context,
                   listen: false,
@@ -244,9 +273,9 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
   }
 
   Widget _buildSnapshotsView() {
-    return Consumer<InventoryComparisonProvider>(
-      builder: (context, provider, child) {
-        if (provider.isLoading) {
+    return Consumer2<InventoryComparisonProvider, ProductDataProvider>(
+      builder: (context, provider, productDataProvider, child) {
+        if (provider.isLoading || productDataProvider.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -335,9 +364,78 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cabecera con información
+            // Información del inventario actual
             Padding(
               padding: const EdgeInsets.all(16.0),
+              child: Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.inventory,
+                            color: Colors.blue[700],
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Inventario Actual',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Mostrar un resumen del inventario actual desde el ProductDataProvider
+                      Text(
+                        'Categorías: ${productDataProvider.currentProductCounts.length}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Total de productos: ${productDataProvider.currentProductCounts.values.fold(0, (prev, count) => prev + count)}',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Última actualización: ${_formatDateTime(productDataProvider.lastUpdated)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _createSnapshot,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Crear instantánea'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Cabecera con información
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -398,7 +496,7 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
             ),
 
             const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
               child: Text(
                 'Instantáneas guardadas',
                 style: TextStyle(
@@ -674,5 +772,10 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
         ),
       ),
     );
+  }
+
+  // Format DateTime to a readable string
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }

@@ -37,18 +37,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
   }
 
   Future<void> _initialize() async {
-    // Obtener el ID del centro desde el provider de autenticación
     setState(() {
       _centerId = Provider.of<AuthProvider>(context, listen: false).centerId;
       _isLoading = false;
     });
 
     if (_centerId != null) {
-      // Cargar reportes analíticos existentes
+      // Load existing analytics reports
       await Provider.of<AnalyticsProvider>(context, listen: false)
           .loadReports(_centerId!);
 
-      // Cargar instantáneas para selección
+      // Load snapshots for selection
       await Provider.of<InventoryComparisonProvider>(context, listen: false)
           .loadInventorySnapshots(_centerId!);
     }
@@ -207,7 +206,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
           );
         }
 
-        // Mostrar lista de reportes
+        // Display list of reports
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: provider.reports.length,
@@ -221,12 +220,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
   }
 
   Widget _buildReportCard(AnalyticsReport report) {
-    // Determinar el color según el tipo de período
-    final color = report.periodType == PeriodType.weekly
+    // Determine color based on period type
+    final periodType = report.getPeriodTypeEnum();
+    final color = periodType == PeriodType.weekly
         ? Colors.blue
         : Colors.green;
 
-    // Obtener estadísticas del reporte
+    // Get report statistics
     final totalCategories = report.categories.length;
     final maxConsumptionCategory = report.getMostConsumedCategory();
     final totalConsumption = report.totalConsumption.values.fold(0, (sum, value) => sum + value);
@@ -252,7 +252,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Cabecera con título e iconos
+              // Header with title and icons
               Row(
                 children: [
                   Container(
@@ -265,7 +265,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      report.periodType == PeriodType.weekly
+                      periodType == PeriodType.weekly
                           ? 'SEMANAL'
                           : 'MENSUAL',
                       style: const TextStyle(
@@ -296,7 +296,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
                 ],
               ),
 
-              // Fecha y rango
+              // Date and range
               Text(
                 'Creado: ${report.getFormattedDate()}',
                 style: TextStyle(
@@ -314,7 +314,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
               ),
               const SizedBox(height: 12),
 
-              // Estadísticas
+              // Statistics
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -424,7 +424,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
           );
         }
 
-        // Obtener todas las categorías disponibles combinando las categorías de todas las instantáneas
+        // Get all available categories by combining categories from all snapshots
         final allCategories = <String>{};
         for (final snapshot in comparisonProvider.snapshots) {
           allCategories.addAll(snapshot.productCounts.keys);
@@ -435,7 +435,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Título e instrucciones
+              // Title and instructions
               const Text(
                 'Nuevo Reporte Analítico',
                 style: TextStyle(
@@ -450,7 +450,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
               ),
               const SizedBox(height: 24),
 
-              // Selección de período
+              // Period type selection
               const Text(
                 'Tipo de Análisis',
                 style: TextStyle(
@@ -490,7 +490,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
               ),
               const SizedBox(height: 24),
 
-              // Selección de instantáneas
+              // Snapshot selection
               const Text(
                 'Rango de Fechas',
                 style: TextStyle(
@@ -532,7 +532,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
               ),
               const SizedBox(height: 24),
 
-              // Selección de categorías
+              // Category selection
               const Text(
                 'Categorías a Analizar',
                 style: TextStyle(
@@ -593,7 +593,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
                 ),
               const SizedBox(height: 24),
 
-              // Nombre del reporte (opcional)
+              // Report name (optional)
               TextField(
                 decoration: InputDecoration(
                   labelText: 'Nombre del Reporte (opcional)',
@@ -603,12 +603,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
                   ),
                 ),
                 onChanged: (value) {
-                  // Guarda el nombre para usarlo al generar el reporte
+                  // Store name to use when generating the report
                 },
               ),
               const SizedBox(height: 24),
 
-              // Botón para generar reporte
+              // Button to generate report
               Center(
                 child: ElevatedButton.icon(
                   onPressed: _canGenerateReport()
@@ -750,35 +750,33 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
       ) {
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Seleccionar instantánea'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: snapshots.length,
-              itemBuilder: (context, index) {
-                final snapshot = snapshots[index];
-                return ListTile(
-                  title: Text(snapshot.name),
-                  subtitle: Text(snapshot.getFormattedDate()),
-                  onTap: () {
-                    onSelect(snapshot);
-                    Navigator.of(context).pop();
-                  },
-                );
-              },
-            ),
+      builder: (context) => AlertDialog(
+        title: const Text('Seleccionar instantánea'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: snapshots.length,
+            itemBuilder: (context, index) {
+              final snapshot = snapshots[index];
+              return ListTile(
+                title: Text(snapshot.name),
+                subtitle: Text(snapshot.getFormattedDate()),
+                onTap: () {
+                  onSelect(snapshot);
+                  Navigator.of(context).pop();
+                },
+              );
+            },
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancelar'),
-            ),
-          ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -806,7 +804,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
       return;
     }
 
-    // Validar que la fecha inicial sea anterior a la final
+    // Validate that the start date is before the end date
     final startDate = DateTime.parse(_startSnapshot!.createdAt);
     final endDate = DateTime.parse(_endSnapshot!.createdAt);
 
@@ -846,10 +844,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
             ),
           );
 
-          // Navegar a la pestaña de reportes
+          // Navigate to reports tab
           _tabController.animateTo(0);
 
-          // Seleccionar el reporte recién creado
+          // Select the newly created report
           provider.selectReport(report);
         }
       }
