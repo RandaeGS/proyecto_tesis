@@ -410,7 +410,7 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Última actualización: ${_formatDateTime(productDataProvider.lastUpdated)}',
+                        'Última actualizacion: ${_formatDateTime(productDataProvider.lastUpdated)}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],

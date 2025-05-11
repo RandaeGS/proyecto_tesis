@@ -152,8 +152,8 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
       final snapshotProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
       snapshotProvider.setProductDataProvider(productDataProvider);
 
-      final snapshotName = 'Actualización Manual - ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
-      final snapshotDesc = 'Actualización manual del inventario';
+      final snapshotName = 'Actualizacion Manual - ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
+      final snapshotDesc = 'Actualizacion manual del inventario';
 
       debugPrint("Creating new snapshot with name: $snapshotName");
       final success = await snapshotProvider.saveSnapshotFromProductData(
@@ -455,7 +455,7 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
                         Consumer<ProductDataProvider>(
                           builder: (context, provider, child) {
                             return Text(
-                              'Última actualización: ${_formatDateTime(provider.lastUpdated)}',
+                              'Última actualizacion: ${_formatDateTime(provider.lastUpdated)}',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey[600],

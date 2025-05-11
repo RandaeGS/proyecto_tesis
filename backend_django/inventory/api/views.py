@@ -450,7 +450,7 @@ class AnalyticsReportViewSet(viewsets.ModelViewSet):
             # Get or create report name
             if not report_name:
                 now = datetime.datetime.now()
-                report_name = f"{'Análisis Semanal' if period_type == 'weekly' else 'Análisis Mensual'} {now.day}/{now.month}/{now.year}"
+                report_name = f"{'Analisis Semanal' if period_type == 'weekly' else 'Analisis Mensual'} {now.day}/{now.month}/{now.year}"
 
             # Create report
             report = AnalyticsReport.objects.create(

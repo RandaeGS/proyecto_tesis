@@ -105,8 +105,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                         ),
                         child: Text(
                           periodTypeEnum == PeriodType.weekly
-                              ? 'ANÁLISIS SEMANAL'
-                              : 'ANÁLISIS MENSUAL',
+                              ? 'ANALISIS SEMANAL'
+                              : 'ANALISIS MENSUAL',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
