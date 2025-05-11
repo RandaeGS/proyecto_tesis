@@ -272,7 +272,7 @@ class InventoryReportViewSet(viewsets.ModelViewSet):
 
             # Create a name for the report
             now = datetime.datetime.now()
-            report_name = f"{'Informe de Emergencia' if is_emergency else 'Informe de Reposición'} {now.day}/{now.month}/{now.year}"
+            report_name = f"{'Informe de Emergencia' if is_emergency else 'Informe de Reposicion'} {now.day}/{now.month}/{now.year}"
 
             # Create the report
             report = InventoryReport.objects.create(
@@ -331,7 +331,7 @@ class InventoryReportViewSet(viewsets.ModelViewSet):
                 if current_count <= 0:
                     note = 'URGENTE: No hay existencias'
                 elif current_count < ideal_count * 0.25:
-                    note = 'Nivel crítico de existencias'
+                    note = 'Nivel critico de existencias'
                 elif current_count < ideal_count * 0.5:
                     note = 'Nivel bajo de existencias'
 
