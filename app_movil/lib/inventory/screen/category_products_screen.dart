@@ -35,41 +35,52 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
   }
 
   Future<void> _initialize() async {
+    if (!mounted) return;
+
     setState(() => _isLoading = true);
 
     try {
-      // Cargar informes para obtener información de productos
-      await Provider.of<InventoryReportProvider>(context, listen: false)
-          .loadReports(widget.centerId);
+      // Primero esperamos a que el widget esté completamente inicializado
+      await Future.delayed(Duration.zero);
 
-      // Cargar imágenes del centro para mostrar ejemplos visuales
-      await Provider.of<ServerImageProvider>(context, listen: false)
-          .loadCenterImages(widget.centerId);
+      // Después de la inicialización completa, cargamos los informes
+      if (mounted) {
+        // Cargar informes para obtener información de productos
+        await Provider.of<InventoryReportProvider>(context, listen: false)
+            .loadReports(widget.centerId);
 
-      // Obtener categorías disponibles
-      final reportProvider = Provider.of<InventoryReportProvider>(context, listen: false);
-      final latestReport = reportProvider.getLatestReport();
+        // Cargar imágenes del centro para mostrar ejemplos visuales
+        await Provider.of<ServerImageProvider>(context, listen: false)
+            .loadCenterImages(widget.centerId);
 
-      if (latestReport != null) {
-        _availableCategories = latestReport.productRecommendations.keys.toList();
-        _productInfoByCategory = latestReport.productRecommendations;
-      } else {
-        // Si no hay informes, usar categorías predeterminadas
-        _availableCategories = InventoryReportService.defaultIdealCounts.keys.toList();
-      }
+        // Obtener categorías disponibles
+        final reportProvider = Provider.of<InventoryReportProvider>(context, listen: false);
+        final latestReport = reportProvider.getLatestReport();
 
-      // Seleccionar categoría inicial
-      if (widget.category != null) {
-        _selectedCategory = widget.category!;
-      } else if (_availableCategories.isNotEmpty) {
-        _selectedCategory = _availableCategories.first;
+        if (latestReport != null) {
+          _availableCategories = latestReport.productRecommendations.keys.toList();
+          _productInfoByCategory = latestReport.productRecommendations;
+        } else {
+          // Si no hay informes, usar categorías predeterminadas
+          _availableCategories = InventoryReportService.defaultIdealCounts.keys.toList();
+        }
+
+        // Seleccionar categoría inicial
+        if (widget.category != null) {
+          _selectedCategory = widget.category!;
+        } else if (_availableCategories.isNotEmpty) {
+          _selectedCategory = _availableCategories.first;
+        }
       }
     } catch (e) {
       debugPrint('Error al inicializar: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

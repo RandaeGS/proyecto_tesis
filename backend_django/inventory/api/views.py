@@ -354,6 +354,125 @@ class InventoryReportViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    @action(detail=True, methods=['PATCH'])
+    def update_recommendations(self, request, pk=None):
+        """
+        Actualiza las recomendaciones de un informe existente
+        """
+        report = self.get_object()
+        recommendations_data = request.data.get('recommendations', [])
+
+        if not recommendations_data:
+            return Response(
+                {'error': 'No recommendations provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        updated_count = 0
+        errors = []
+
+        for rec_data in recommendations_data:
+            category_id = rec_data.get('category')
+            if not category_id:
+                errors.append({'error': 'Missing category ID', 'data': rec_data})
+                continue
+
+            ideal_count = rec_data.get('ideal_count')
+            if ideal_count is None:
+                errors.append({'error': 'Missing ideal_count', 'data': rec_data})
+                continue
+
+            # Si se proporciona prioridad, usarla; de lo contrario, calcularla
+            priority = rec_data.get('priority')
+            current_count = rec_data.get('current_count')
+
+            try:
+                # Obtener la categoría
+                category = ProductCategory.objects.get(id=category_id)
+
+                # Buscar la recomendación existente
+                try:
+                    recommendation = ProductRecommendation.objects.get(
+                        report=report,
+                        category=category
+                    )
+
+                    # Actualizar la recomendación
+                    recommendation.ideal_count = ideal_count
+
+                    if priority is not None:
+                        recommendation.priority = priority
+                    elif current_count is not None:
+                        # Calcular la prioridad basada en porcentaje faltante
+                        if ideal_count <= 0:
+                            percentage_missing = 0
+                        else:
+                            percentage_missing = ((ideal_count - current_count) / ideal_count) * 100
+
+                        if percentage_missing <= 10:
+                            recommendation.priority = 1  # Very Low
+                        elif percentage_missing <= 30:
+                            recommendation.priority = 2  # Low
+                        elif percentage_missing <= 50:
+                            recommendation.priority = 3  # Medium
+                        elif percentage_missing <= 75:
+                            recommendation.priority = 4  # High
+                        else:
+                            recommendation.priority = 5  # Very High
+
+                    # Actualizar nota si se proporciona
+                    if 'note' in rec_data:
+                        recommendation.note = rec_data['note']
+
+                    recommendation.save()
+                    updated_count += 1
+
+                except ProductRecommendation.DoesNotExist:
+                    # La recomendación no existe, crear una nueva
+                    if current_count is None:
+                        current_count = 0
+
+                    if priority is None:
+                        # Calcular prioridad por defecto
+                        if ideal_count <= 0:
+                            priority = 1
+                        else:
+                            percentage_missing = ((ideal_count - current_count) / ideal_count) * 100
+
+                            if percentage_missing <= 10:
+                                priority = 1  # Very Low
+                            elif percentage_missing <= 30:
+                                priority = 2  # Low
+                            elif percentage_missing <= 50:
+                                priority = 3  # Medium
+                            elif percentage_missing <= 75:
+                                priority = 4  # High
+                            else:
+                                priority = 5  # Very High
+
+                    note = rec_data.get('note', '')
+
+                    ProductRecommendation.objects.create(
+                        report=report,
+                        category=category,
+                        current_count=current_count,
+                        ideal_count=ideal_count,
+                        priority=priority,
+                        note=note
+                    )
+                    updated_count += 1
+
+            except ProductCategory.DoesNotExist:
+                errors.append({'error': f'Category not found: {category_id}', 'data': rec_data})
+            except Exception as e:
+                errors.append({'error': str(e), 'data': rec_data})
+
+        return Response({
+            'report_id': str(report.id),
+            'updated_count': updated_count,
+            'errors': errors
+        })
+
 
 class AnalyticsReportViewSet(viewsets.ModelViewSet):
     """

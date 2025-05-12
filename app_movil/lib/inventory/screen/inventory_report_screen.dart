@@ -139,31 +139,47 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
     try {
       if (_centerId == null) return;
 
-      final prefs = await SharedPreferences.getInstance();
-      final savedConfig = prefs.getString('ideal_counts_${_centerId}');
+      // PRIMERO: Intentar cargar desde el backend
+      final reportProvider = Provider.of<InventoryReportProvider>(context, listen: false);
+      final backendConfig = await reportProvider.loadIdealCounts(_centerId!);
 
-      if (savedConfig != null && savedConfig.isNotEmpty) {
-        debugPrint('Cargando configuración guardada');
-        final Map<String, dynamic> savedMap = json.decode(savedConfig);
-
-        // Filtrar solo las categorías activas
-        final filteredConfig = savedMap.map(
-          (key, value) => MapEntry(key, value is int ? value : int.tryParse(value.toString()) ?? 0)
-        )..removeWhere((key, _) => !_activeCategories.contains(key));
-
-        _customIdealCounts = filteredConfig;
-        debugPrint('Configuración cargada (filtrada por categorías activas): $_customIdealCounts');
+      if (backendConfig.isNotEmpty) {
+        _customIdealCounts = backendConfig;
+        debugPrint('Configuración cargada desde backend: $_customIdealCounts');
       } else {
-        debugPrint('No se encontró configuración guardada');
-        _customIdealCounts = {};
-        for (var category in _activeCategories) {
-          _customIdealCounts[category] = InventoryReportService.defaultIdealCounts[category] ?? 0;
+        // SI FALLA: Cargar desde SharedPreferences (local)
+        final prefs = await SharedPreferences.getInstance();
+        final savedConfig = prefs.getString('ideal_counts_${_centerId}');
+
+        if (savedConfig != null && savedConfig.isNotEmpty) {
+          debugPrint('Cargando configuración guardada localmente');
+          final Map<String, dynamic> savedMap = json.decode(savedConfig);
+
+          // Filtrar solo las categorías activas
+          final filteredConfig = savedMap.map(
+                  (key, value) => MapEntry(key, value is int ? value : int.tryParse(value.toString()) ?? 0)
+          )..removeWhere((key, _) => !_activeCategories.contains(key));
+
+          _customIdealCounts = filteredConfig;
+          debugPrint('Configuración cargada localmente: $_customIdealCounts');
+        } else {
+          debugPrint('No se encontró configuración guardada');
+          _customIdealCounts = {};
+          for (var category in _activeCategories) {
+            _customIdealCounts[category] = InventoryReportService.defaultIdealCounts[category] ?? 0;
+          }
         }
       }
     } catch (e) {
-      debugPrint('Error al cargar configuración guardada: $e');
+      debugPrint('Error al cargar configuración: $e');
+      // Usar valores por defecto
+      _customIdealCounts = {};
+      for (var category in _activeCategories) {
+        _customIdealCounts[category] = InventoryReportService.defaultIdealCounts[category] ?? 0;
+      }
     }
   }
+
 
 
   Future<void> _saveConfiguration() async {
@@ -172,21 +188,25 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
 
       _updateCustomIdealCounts();
 
+      // Guardar localmente (SharedPreferences)
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('ideal_counts_${_centerId}', json.encode(_customIdealCounts));
 
-      // NUEVA PARTE: Actualizar los informes existentes con las nuevas cantidades ideales
-      Provider.of<InventoryReportProvider>(context, listen: false)
-          .updateIdealCountsInReports(_customIdealCounts);
+      // NUEVO: Guardar en el backend
+      final success = await Provider.of<InventoryReportProvider>(context, listen: false)
+          .saveIdealCounts(_centerId!, _customIdealCounts);
 
-      debugPrint('Configuración guardada: $_customIdealCounts');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Configuración guardada correctamente'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (success) {
+        debugPrint('Configuración guardada: $_customIdealCounts');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Configuración guardada correctamente'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('Error al guardar en el servidor');
+      }
     } catch (e) {
       debugPrint('Error al guardar configuración: $e');
       if (mounted) {
@@ -199,6 +219,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
       }
     }
   }
+
 
   Future<void> _initializeControllers() async {
     _clearControllers();

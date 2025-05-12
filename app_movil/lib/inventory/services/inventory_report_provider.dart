@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 import '../entity/inventory_report.dart';
@@ -296,4 +297,293 @@ class InventoryReportProvider with ChangeNotifier {
     if (percentageMissing <= 75) return 4;
     return 5; // Más del 75% faltante
   }
+
+
+  Future<bool> saveIdealCounts(int centerId, Map<String, int> idealCounts) async {
+    _isLoading = true;
+    _errorMessage = '';
+    notifyListeners();
+
+    try {
+      // Imprimir las categorías y valores ideales actuales para depuración
+      debugPrint('Guardando valores ideales: $idealCounts');
+
+      // Antes de guardar, veamos si realmente hay cambios que hacer
+      bool hasChanges = false;
+
+      // Primero cargamos los valores ideales actuales del backend para comparar
+      // O alternativamente usa el endpoint with_ideal_counts
+      final url = Uri.parse('${AppConfig.getApiUrl()}/inventory/api/categories/with_ideal_counts/');
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> currentIdealCounts = json.decode(response.body);
+
+        // Comparar los valores actuales con los nuevos
+        idealCounts.forEach((category, newCount) {
+          final currentCount = currentIdealCounts[category];
+          if (currentCount != newCount) {
+            hasChanges = true;
+            debugPrint('Cambio detectado en $category: $currentCount -> $newCount');
+          }
+        });
+      }
+
+      if (!hasChanges) {
+        debugPrint('No se detectaron cambios en los valores ideales, continuando de todas formas');
+      }
+
+      // Guardamos los valores ideales en las categorías
+      final updateUrl = Uri.parse('${AppConfig.getApiUrl()}/inventory/api/categories/update_ideal_counts/');
+      final updateResponse = await http.post(
+        updateUrl,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
+        body: json.encode(idealCounts),
+      );
+
+      debugPrint('Response status: ${updateResponse.statusCode}');
+      debugPrint('Response body: ${updateResponse.body}');
+
+      bool success = updateResponse.statusCode == 200 || updateResponse.statusCode == 201;
+
+      // Actualizamos los informes en memoria sin importar el resultado del servidor
+      updateIdealCountsInReports(idealCounts);
+
+      // Ahora actualizamos las recomendaciones en el backend
+      // IMPORTANTE: Incluso si no hay cambios detectados, forzamos la actualización para asegurar consistencia
+      await _updateRecommendationsInBackendFixed(idealCounts);
+
+      // Guardamos los valores en SharedPreferences para respaldo
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('ideal_counts_$centerId', json.encode(idealCounts));
+
+      return success;
+    } catch (e) {
+      _errorMessage = 'Error al guardar configuración: $e';
+      debugPrint(_errorMessage);
+
+      // Aún actualizamos localmente como respaldo
+      updateIdealCountsInReports(idealCounts);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('ideal_counts_$centerId', json.encode(idealCounts));
+
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+// Este método actualiza TODAS las recomendaciones sin comparar los valores ideales anteriores
+  Future<void> _updateRecommendationsInBackendFixed(Map<String, int> idealCounts) async {
+    if (_reports.isEmpty) {
+      debugPrint('No hay informes para actualizar en el backend');
+      return;
+    }
+
+    debugPrint('Actualizando recomendaciones en el backend para ${_reports.length} informes');
+
+    // Para cada informe, enviaremos las actualizaciones de recomendaciones forzadas
+    for (var report in _reports) {
+      try {
+        final recommendations = <Map<String, dynamic>>[];
+
+        // Para cada categoría en los valores ideales
+        idealCounts.forEach((categoryName, newIdealCount) {
+          // Buscar si esta categoría está en las recomendaciones del informe
+          if (report.productRecommendations.containsKey(categoryName)) {
+            final info = report.productRecommendations[categoryName]!;
+
+            // Calcular nueva prioridad
+            final newPriority = _calculateNewPriority(info.currentCount, newIdealCount);
+
+            // FORZAR LA ACTUALIZACIÓN sin comparar con el valor anterior
+            recommendations.add({
+              'category': info.categoryId, // ID de la categoría
+              'ideal_count': newIdealCount,
+              'current_count': info.currentCount,
+              'priority': newPriority,
+              'note': info.note,
+            });
+
+            debugPrint('Forzando actualización para $categoryName en informe ${report.id}');
+          }
+        });
+
+        if (recommendations.isEmpty) {
+          debugPrint('No se encontraron categorías para actualizar en el informe ${report.id}');
+          continue;
+        }
+
+        // Construir URL para actualizar las recomendaciones
+        final url = Uri.parse('${AppConfig.getApiUrl()}/inventory/api/reports/${report.id}/update_recommendations/');
+
+        debugPrint('Enviando ${recommendations.length} actualizaciones para el informe ${report.id}');
+
+        // Realizar la petición PATCH
+        final response = await http.patch(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $_authToken',
+          },
+          body: json.encode({'recommendations': recommendations}),
+        );
+
+        if (response.statusCode == 200 || response.statusCode == 204) {
+          final responseData = json.decode(response.body);
+          debugPrint('Actualización exitosa. Actualizados: ${responseData['updated_count']}');
+          if (responseData['errors'] != null && responseData['errors'].isNotEmpty) {
+            debugPrint('Errores: ${responseData['errors']}');
+          }
+        } else {
+          debugPrint('Error: ${response.statusCode}, ${response.body}');
+        }
+      } catch (e) {
+        debugPrint('Error al actualizar informe ${report.id}: $e');
+      }
+    }
+  }
+
+  Future<Map<String, int>> loadIdealCounts(int centerId) async {
+    // Si ya tenemos valores en memoria, los devolvemos
+    if (_currentIdealCounts.isNotEmpty) {
+      debugPrint('Devolviendo valores ideales de memoria: $_currentIdealCounts');
+      return _currentIdealCounts;
+    }
+
+    _isLoading = true;
+    _errorMessage = '';
+    notifyListeners();
+
+    try {
+      // Primero intentamos cargar desde el endpoint correcto
+      final url = Uri.parse('${AppConfig.getApiUrl()}/inventory/api/categories/with_ideal_counts/');
+      debugPrint('Intentando cargar valores ideales desde: $url');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_authToken',
+        },
+      );
+
+      debugPrint('Response status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        // Aquí el backend devuelve directamente un objeto {category_name: ideal_count, ...}
+        final Map<String, dynamic> data = json.decode(response.body);
+        final Map<String, int> idealCounts = {};
+
+        // Convertir valores a enteros
+        data.forEach((key, value) {
+          idealCounts[key] = value is int ? value : int.tryParse(value.toString()) ?? 0;
+        });
+
+        debugPrint('Valores ideales cargados desde backend: $idealCounts');
+
+        // Guardar en memoria y en SharedPreferences
+        _currentIdealCounts = idealCounts;
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('ideal_counts_$centerId', json.encode(idealCounts));
+
+        return idealCounts;
+      } else if (response.statusCode == 404) {
+        debugPrint('ERROR 404: Endpoint no encontrado. Intentando URL alternativa...');
+
+        // Intentar con una URL alternativa (sin "inventory/api")
+        final alternativeUrl = Uri.parse('${AppConfig.getApiUrl()}/categories/with_ideal_counts/');
+        debugPrint('Intentando URL alternativa: $alternativeUrl');
+
+        try {
+          final altResponse = await http.get(
+            alternativeUrl,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $_authToken',
+            },
+          );
+
+          debugPrint('Respuesta alternativa status: ${altResponse.statusCode}');
+
+          if (altResponse.statusCode == 200) {
+            final Map<String, dynamic> altData = json.decode(altResponse.body);
+            final Map<String, int> altIdealCounts = {};
+
+            altData.forEach((key, value) {
+              altIdealCounts[key] = value is int ? value : int.tryParse(value.toString()) ?? 0;
+            });
+
+            _currentIdealCounts = altIdealCounts;
+
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('ideal_counts_$centerId', json.encode(altIdealCounts));
+
+            return altIdealCounts;
+          }
+        } catch (e) {
+          debugPrint('Error con URL alternativa: $e');
+        }
+
+        // Si llegamos aquí, ambos intentos fallaron
+        return _loadFromSharedPreferences(centerId);
+      } else {
+        // Cualquier otro error, intentar cargar desde SharedPreferences
+        debugPrint('Error al cargar desde backend: ${response.statusCode}');
+        return _loadFromSharedPreferences(centerId);
+      }
+    } catch (e) {
+      _errorMessage = 'Error al cargar configuración: $e';
+      debugPrint(_errorMessage);
+
+      // Si falla, cargar desde SharedPreferences
+      return _loadFromSharedPreferences(centerId);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+// Método auxiliar para cargar desde SharedPreferences
+  Future<Map<String, int>> _loadFromSharedPreferences(int centerId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedConfig = prefs.getString('ideal_counts_$centerId');
+
+      if (savedConfig != null && savedConfig.isNotEmpty) {
+        debugPrint('Cargando configuración desde SharedPreferences');
+        final Map<String, dynamic> savedMap = json.decode(savedConfig);
+        final Map<String, int> idealCounts = {};
+
+        savedMap.forEach((key, value) {
+          idealCounts[key] = value is int ? value : int.tryParse(value.toString()) ?? 0;
+        });
+
+        // Guardar en memoria
+        _currentIdealCounts = idealCounts;
+
+        debugPrint('Valores ideales cargados desde SharedPreferences: $idealCounts');
+        return idealCounts;
+      }
+
+      debugPrint('No se encontraron valores ideales guardados en SharedPreferences');
+      return {};
+    } catch (e) {
+      debugPrint('Error al cargar desde SharedPreferences: $e');
+      return {};
+    }
+  }
+
 }
