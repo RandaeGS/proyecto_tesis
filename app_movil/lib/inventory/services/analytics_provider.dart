@@ -40,12 +40,15 @@ class AnalyticsProvider with ChangeNotifier {
 
   /// Load analytics reports for a specific center
   Future<void> loadReports(int centerId) async {
+    // IMPORTANTE: No llamar a notifyListeners aquí - puede causar error en el build
+    // Sólo actualizamos internamente el estado
     _isLoading = true;
     _errorMessage = '';
-    notifyListeners();
 
     try {
       final url = Uri.parse('$_baseUrl/analytics/by_center/?center_id=$centerId');
+
+      debugPrint('Loading analytics reports from: $url');
 
       final response = await http.get(
         url,
@@ -55,18 +58,51 @@ class AnalyticsProvider with ChangeNotifier {
         },
       );
 
+      debugPrint('Response status: ${response.statusCode}');
+      // Limitar la longitud del log para evitar problemas
+      final responsePreview = response.body.length > 500
+          ? '${response.body.substring(0, 500)}...'
+          : response.body;
+      debugPrint('Response body: $responsePreview');
+
       if (response.statusCode == 200) {
-        final List<dynamic> reportsJson = json.decode(response.body);
+        // Intentar decodificar con manejo de errores
+        List<dynamic> reportsJson;
+        try {
+          reportsJson = json.decode(response.body);
+        } catch (e) {
+          debugPrint('Error parsing JSON: $e');
+          throw Exception('Error decoding response: $e');
+        }
 
-        _reports = reportsJson.map((json) => AnalyticsReport.fromJson(json)).toList();
+        // Lista temporal para almacenar los reportes procesados
+        final List<AnalyticsReport> tempReports = [];
 
-        // Sort by creation date (most recent first)
-        _reports.sort((a, b) =>
-            DateTime.parse(b.createdAt).compareTo(DateTime.parse(a.createdAt))
-        );
+        // Procesar cada reporte individualmente
+        for (var reportJson in reportsJson) {
+          try {
+            final report = AnalyticsReport.fromJson(reportJson);
+            tempReports.add(report);
+          } catch (e) {
+            // Registrar error pero continuar con otros reportes
+            debugPrint('Error parsing report: $e');
+          }
+        }
 
-        // Reset selected report
-        _selectedReport = null;
+        // Actualizar la lista principal sólo si hubo éxito
+        if (tempReports.isNotEmpty) {
+          _reports = tempReports;
+
+          // Sort by creation date (most recent first)
+          _reports.sort((a, b) =>
+              DateTime.parse(b.createdAt).compareTo(DateTime.parse(a.createdAt))
+          );
+
+          // Reset selected report
+          _selectedReport = null;
+        } else {
+          _errorMessage = 'No se pudieron procesar los reportes';
+        }
       } else {
         _errorMessage = 'Error al cargar reportes analíticos: ${response.statusCode}';
         debugPrint(_errorMessage);
@@ -76,6 +112,7 @@ class AnalyticsProvider with ChangeNotifier {
       debugPrint(_errorMessage);
     } finally {
       _isLoading = false;
+      // Ahora que todo el procesamiento ha terminado, notificamos
       notifyListeners();
     }
   }
@@ -103,6 +140,7 @@ class AnalyticsProvider with ChangeNotifier {
         if (reportName != null && reportName.isNotEmpty) 'report_name': reportName,
       };
 
+      debugPrint('Generating report with data: $data');
       final url = Uri.parse('$_baseUrl/analytics/generate/');
 
       final response = await http.post(
@@ -114,19 +152,59 @@ class AnalyticsProvider with ChangeNotifier {
         body: json.encode(data),
       );
 
+      debugPrint('Response status: ${response.statusCode}');
+      debugPrint('Response body: ${response.body}');
+
       if (response.statusCode == 200) {
-        final reportJson = json.decode(response.body);
-        final report = AnalyticsReport.fromJson(reportJson);
+        // Parsear con manejo de excepciones seguro
+        Map<String, dynamic> reportJson;
+        try {
+          reportJson = json.decode(response.body);
+          debugPrint('Report JSON: $reportJson');
+        } catch (e) {
+          debugPrint('Error parsing JSON response: $e');
+          throw Exception('Invalid JSON response: $e');
+        }
 
-        // Reload reports to include the new one
-        await loadReports(centerId);
+        // Manejar explícitamente campos problemáticos
+        // Asegurarnos de que categories exista
+        if (reportJson['categories'] == null) {
+          if (reportJson['consumption_totals'] is List) {
+            final categoryNames = <String>[];
+            for (var total in reportJson['consumption_totals']) {
+              if (total['category_name'] != null) {
+                categoryNames.add(total['category_name']);
+              }
+            }
+            reportJson['categories'] = categoryNames;
+          } else {
+            reportJson['categories'] = []; // Valor predeterminado
+          }
+        }
 
-        // Select the newly created report
-        _selectedReport = report;
+        // Crear el reporte
+        try {
+          final report = AnalyticsReport.fromJson(reportJson);
 
-        return report;
+          // Debug output to verify data was correctly parsed
+          debugPrint('Parsed report: ${report.name}');
+          debugPrint('Categories: ${report.categories}');
+          debugPrint('Total consumption: ${report.totalConsumption}');
+          debugPrint('Consumption data points: ${report.consumptionData.keys.length}');
+
+          // Reload reports to include the new one
+          await loadReports(centerId);
+
+          // Select the newly created report
+          _selectedReport = report;
+
+          return report;
+        } catch (e) {
+          debugPrint('Error creating AnalyticsReport object: $e');
+          throw Exception('Error creating report object: $e');
+        }
       } else {
-        _errorMessage = 'Error al generar reporte analítico: ${response.statusCode}';
+        _errorMessage = 'Error al generar reporte analítico: ${response.statusCode} - ${response.body}';
         debugPrint(_errorMessage);
         return null;
       }

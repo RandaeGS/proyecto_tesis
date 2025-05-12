@@ -76,6 +76,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
     final periodTypeEnum = widget.report.getPeriodTypeEnum();
     final color = periodTypeEnum == PeriodType.weekly ? Colors.blue : Colors.green;
 
+    // Get max category and check if it's an increase
+    final maxCategory = maxConsumptionCategory.split(' ').first;
+    final isMaxIncrease = _isIncrease(maxCategory);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -149,20 +153,23 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                     Icons.category,
                   ),
                   _buildInfoRow(
-                    'Consumo total:',
+                    'Total de movimientos:',
                     '$totalConsumption unidades',
-                    Icons.shopping_basket,
+                    Icons.compare_arrows,
                   ),
+
+                  // Show appropriate label based on whether it's an increase or consumption
                   _buildInfoRow(
-                    'Mayor consumo:',
+                    isMaxIncrease ? 'Mayor aumento:' : 'Mayor consumo:',
                     maxConsumptionCategory != 'N/A'
                         ? maxConsumptionCategory
                         : 'N/A',
-                    Icons.trending_up,
-                    valueColor: Colors.green,
+                    isMaxIncrease ? Icons.arrow_upward : Icons.arrow_downward,
+                    valueColor: isMaxIncrease ? Colors.green : Colors.red,
+                    isIncrease: isMaxIncrease,
                   ),
                   _buildInfoRow(
-                    'Menor consumo:',
+                    'Menor movimiento:',
                     minConsumptionCategory != 'N/A'
                         ? minConsumptionCategory
                         : 'N/A',
@@ -178,7 +185,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           // Consumption by category table
           const Text(
-            'Consumo por Categoría',
+            'Movimiento por Categoría',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -211,7 +218,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                         const Expanded(
                           flex: 2,
                           child: Text(
-                            'Consumo',
+                            'Movimiento',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                             ),
@@ -250,6 +257,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                     final consumption = widget.report.totalConsumption[category] ?? 0;
                     final dailyAvg = averageDailyConsumption[category]?.toStringAsFixed(1) ?? '0';
                     final peakDay = peakConsumptionDays[category] ?? 'N/A';
+                    final isIncreaseCategory = _isIncrease(category);
 
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -257,11 +265,23 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                         children: [
                           Expanded(
                             flex: 3,
-                            child: Text(
-                              category,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isIncreaseCategory ? Icons.arrow_upward : Icons.arrow_downward,
+                                  size: 14,
+                                  color: isIncreaseCategory ? Colors.green : Colors.red,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    category,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           Expanded(
@@ -269,6 +289,10 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                             child: Text(
                               '$consumption',
                               textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: isIncreaseCategory ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           Expanded(
@@ -319,10 +343,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                 children: [
                   if (maxConsumptionCategory != 'N/A') ...[
                     _buildInsightItem(
-                      Icons.trending_up,
-                      Colors.green,
-                      'Mayor demanda: $maxConsumptionCategory',
-                      'Esta categoría tuvo el mayor consumo durante el período. Considera aumentar su stock.',
+                      isMaxIncrease ? Icons.arrow_upward : Icons.arrow_downward,
+                      isMaxIncrease ? Colors.green : Colors.red,
+                      isMaxIncrease
+                          ? 'Mayor aumento: $maxConsumptionCategory'
+                          : 'Mayor consumo: $maxConsumptionCategory',
+                      isMaxIncrease
+                          ? 'Esta categoría tuvo el mayor aumento durante el período. Revisa si el aumento se debe a reposición o a otras causas.'
+                          : 'Esta categoría tuvo el mayor consumo durante el período. Considera aumentar su stock.',
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -331,8 +359,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                     _buildInsightItem(
                       Icons.trending_down,
                       Colors.orange,
-                      'Menor demanda: $minConsumptionCategory',
-                      'Esta categoría tuvo el menor consumo. Evalúa si es necesario reducir su stock.',
+                      'Menor movimiento: $minConsumptionCategory',
+                      'Esta categoría tuvo el menor movimiento. Evalúa si es necesario ajustar su inventario.',
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -341,8 +369,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   _buildInsightItem(
                     Icons.insights,
                     Colors.blue,
-                    'Consumo promedio diario total',
-                    'El promedio de consumo diario fue de ${averageDailyConsumption.values.fold(0.0, (sum, value) => sum + value).toStringAsFixed(1)} unidades entre todas las categorías.',
+                    'Movimiento promedio diario total',
+                    'El promedio de movimiento diario fue de ${averageDailyConsumption.values.fold(0.0, (sum, value) => sum + value).toStringAsFixed(1)} unidades entre todas las categorías.',
                   ),
                 ],
               ),
@@ -353,7 +381,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
     );
   }
 
-  Widget _buildInfoRow(String label, String value, IconData icon, {Color? valueColor}) {
+  Widget _buildInfoRow(String label, String value, IconData icon, {Color? valueColor, bool isIncrease = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
@@ -361,7 +389,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
           Icon(
             icon,
             size: 18,
-            color: Colors.blue,
+            color: isIncrease ? Colors.green : (label.contains("consumo") ? Colors.red : Colors.blue),
           ),
           const SizedBox(width: 8),
           Text(
@@ -369,12 +397,17 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
             style: const TextStyle(fontSize: 14),
           ),
           const Spacer(),
+          if (isIncrease)
+            Icon(Icons.arrow_upward, size: 14, color: Colors.green)
+          else if (label.contains("consumo"))
+            Icon(Icons.arrow_downward, size: 14, color: Colors.red),
+          const SizedBox(width: 4),
           Text(
             value,
             style: TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
-              color: valueColor,
+              color: valueColor ?? (isIncrease ? Colors.green : (label.contains("consumo") ? Colors.red : Colors.blue)),
             ),
           ),
         ],
@@ -458,6 +491,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                       itemBuilder: (context, index) {
                         final category = widget.report.categories[index];
                         final isSelected = category == _selectedCategory;
+                        final isIncreaseCategory = _isIncrease(category);
 
                         return GestureDetector(
                           onTap: () {
@@ -469,20 +503,41 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: isSelected ? Colors.blue : Colors.transparent,
+                              color: isSelected
+                                  ? (isIncreaseCategory ? Colors.green : Colors.blue)
+                                  : Colors.transparent,
                               border: Border.all(
-                                color: Colors.blue,
+                                color: isIncreaseCategory ? Colors.green : Colors.blue,
                                 width: 1,
                               ),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Center(
-                              child: Text(
-                                category,
-                                style: TextStyle(
-                                  color: isSelected ? Colors.white : Colors.blue,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                ),
+                              child: Row(
+                                children: [
+                                  if (isIncreaseCategory)
+                                    Icon(
+                                      Icons.arrow_upward,
+                                      size: 12,
+                                      color: isSelected ? Colors.white : Colors.green,
+                                    )
+                                  else
+                                    Icon(
+                                      Icons.arrow_downward,
+                                      size: 12,
+                                      color: isSelected ? Colors.white : Colors.red,
+                                    ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    category,
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : (isIncreaseCategory ? Colors.green : Colors.blue),
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -497,9 +552,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           const SizedBox(height: 24),
 
-          // Bar chart for total consumption
+          // Bar chart for total movement
           const Text(
-            'Consumo Total por Categoría',
+            'Movimiento Total por Categoría',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -510,14 +565,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           const SizedBox(height: 24),
 
-          // Line chart for consumption over time
+          // Line chart for detailed movement
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Consumo Detallado',
+                'Movimiento Detallado',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -581,8 +636,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                 touchTooltipData: BarTouchTooltipData(
                   tooltipBgColor: Colors.blueGrey,
                   getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                    final category = categories[groupIndex];
+                    // Determine if it's an increase or consumption
+                    final isIncrease = _isIncrease(category);
+                    final movementType = isIncrease ? "Aumento" : "Consumo";
+
                     return BarTooltipItem(
-                      '${categories[groupIndex]}\n',
+                      '$category - $movementType\n',
                       const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -653,7 +713,8 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   barRods: [
                     BarChartRodData(
                       toY: consumptionData[index].toDouble(),
-                      color: Colors.blue,
+                      // Use different color for increases vs. consumption
+                      color: _isIncrease(categories[index]) ? Colors.green : Colors.red,
                       width: 20,
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(6),
@@ -665,7 +726,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
               ),
               gridData: FlGridData(
                 show: true,
-                horizontalInterval: horizontalInterval, // Use calculated and validated value
+                horizontalInterval: horizontalInterval,
                 drawVerticalLine: false,
                 getDrawingHorizontalLine: (value) {
                   return FlLine(
@@ -681,9 +742,27 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
     );
   }
 
+  bool _isIncrease(String category) {
+    // Primero verifica en los totales de consumo
+    final total = widget.report.totalConsumption[category] ?? 0;
+
+    // Luego verifica en los data points si hay alguno marcado como aumento
+    if (widget.report.consumptionData.containsKey(category)) {
+      final dataPoints = widget.report.consumptionData[category]!;
+      if (dataPoints.isNotEmpty) {
+        // Si hay algún data point marcado como aumento, consideramos que es un aumento
+        return dataPoints.any((point) => point.isIncrease());
+      }
+    }
+
+    // Si no hay data points, asumimos que es consumo (a menos que el total sea positivo)
+    return total > 0;
+  }
+
   Widget _buildDetailedConsumptionChart() {
     // Get data for the chart
     final dataPoints = widget.report.consumptionData[_selectedCategory] ?? [];
+    final isIncreaseCategory = _isIncrease(_selectedCategory);
 
     if (dataPoints.isEmpty) {
       return const Card(
@@ -797,7 +876,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
               borderData: FlBorderData(show: false),
               gridData: FlGridData(
                 show: true,
-                horizontalInterval: horizontalInterval, // Use calculated and validated value
+                horizontalInterval: horizontalInterval,
                 drawVerticalLine: false,
                 getDrawingHorizontalLine: (value) {
                   return FlLine(
@@ -811,7 +890,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
               minY: 0,
               maxY: maxY.toDouble(),
               lineBarsData: [
-                // Consumption line
+                // Consumption/Increase line
                 LineChartBarData(
                   spots: List.generate(
                     dataPoints.length,
@@ -821,13 +900,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                     ),
                   ),
                   isCurved: true,
-                  color: Colors.blue,
+                  color: isIncreaseCategory ? Colors.green : Colors.red,
                   barWidth: 3,
                   isStrokeCapRound: true,
                   dotData: const FlDotData(show: true),
                   belowBarData: BarAreaData(
                     show: true,
-                    color: Colors.blue.withOpacity(0.2),
+                    color: isIncreaseCategory ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
                   ),
                 ),
                 // Average line (optional)

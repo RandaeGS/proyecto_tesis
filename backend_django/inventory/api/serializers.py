@@ -243,6 +243,11 @@ class AnalyticsReportSerializer(serializers.ModelSerializer):
 
     def get_categories(self, obj):
         """Returns list of category names included in this report"""
+        # First try to get from categories_list field (new approach)
+        if hasattr(obj, 'categories_list') and obj.categories_list:
+            return obj.get_category_names()
+
+        # Fallback to the old approach
         return [cat.name for cat in obj.get_analyzed_categories()]
 
     def get_date_range(self, obj):
@@ -254,13 +259,15 @@ class AnalyticsReportSerializer(serializers.ModelSerializer):
         }
 
     def get_most_consumed(self, obj):
-        most_consumed = obj.get_most_consumed_category()
-        if most_consumed:
+        """Returns category with the highest movement (can be consumption or increase)"""
+        most_movement = obj.get_most_consumed_category()
+        if most_movement:
             return {
-                'category': most_consumed.category.name,
-                'count': most_consumed.count
+                'category': most_movement.category.name,
+                'count': most_movement.count,
+                'is_increase': obj.is_increase(most_movement.category)
             }
-        return {'category': 'N/A', 'count': 0}
+        return {'category': 'N/A', 'count': 0, 'is_increase': False}
 
     def get_least_consumed(self, obj):
         least_consumed = obj.get_least_consumed_category()
@@ -290,7 +297,6 @@ class AnalyticsReportSerializer(serializers.ModelSerializer):
             ConsumptionDataPoint.objects.create(report=report, **point_data)
 
         return report
-
 
 # Serializers for special operations
 

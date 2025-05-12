@@ -270,7 +270,7 @@ class InventoryReportViewSet(viewsets.ModelViewSet):
             # Get the snapshot
             snapshot = InventorySnapshot.objects.get(id=snapshot_id)
 
-            # Create a name for the report  
+            # Create a name for the report
             now = datetime.datetime.now()
             report_name = f"{'Informe de Emergencia' if is_emergency else 'Informe de Reposicion'} {now.day}/{now.month}/{now.year}"
 
@@ -421,6 +421,11 @@ class AnalyticsReportViewSet(viewsets.ModelViewSet):
         """
         Generate a new analytics report
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("Generating analytics report with data: %s", request.data)
+
+
         serializer = GenerateAnalyticsReportSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -461,13 +466,15 @@ class AnalyticsReportViewSet(viewsets.ModelViewSet):
                 start_date=start_date,
                 end_date=end_date,
                 start_snapshot=start_snapshot,
-                end_snapshot=end_snapshot
+                end_snapshot=end_snapshot,
+                categories_list=",".join(selected_categories) if selected_categories else ""
             )
 
             # Get categories to analyze
             categories_to_analyze = []
             if selected_categories:
                 # Use selected categories
+                logger.info(f"Using {len(selected_categories)} selected categories")
                 for cat_name in selected_categories:
                     try:
                         category = ProductCategory.objects.get(name=cat_name)
@@ -482,8 +489,11 @@ class AnalyticsReportViewSet(viewsets.ModelViewSet):
                 end_categories = set(item.category for item in end_snapshot.items.all())
                 categories_to_analyze = list(start_categories.union(end_categories))
 
-            # Calculate consumption for each category
+            logger.info(f"Categories for analysis: {[c.name for c in categories_to_analyze]}")
+
+            # Calculate movement for each category
             days = (end_date - start_date).days + 1
+            logger.info(f"Analysis period: {days} days")
             import random  # For distributing consumption data
 
             for category in categories_to_analyze:
@@ -496,6 +506,8 @@ class AnalyticsReportViewSet(viewsets.ModelViewSet):
                 except InventoryItem.DoesNotExist:
                     start_count = 0
 
+                logger.info(f"Start count for {category.name}: {start_count}")
+
                 try:
                     end_count = InventoryItem.objects.get(
                         snapshot=end_snapshot,
@@ -504,80 +516,52 @@ class AnalyticsReportViewSet(viewsets.ModelViewSet):
                 except InventoryItem.DoesNotExist:
                     end_count = 0
 
-                # Calculate consumption (assume consumption = reduction in inventory)
-                consumption_value = max(0, start_count - end_count)
+                logger.info(f"End count for {category.name}: {end_count}")
 
-                # Create total consumption record
+                # Calculate movement (positive means increase, negative means consumption)
+                movement = end_count - start_count
+                is_increase = movement > 0
+
+                # Store absolute value for stats
+                movement_value = abs(movement)
+
+                # Log the type of movement
+                if is_increase:
+                    logger.info(f"Movement for {category.name}: {movement_value} (increase)")
+                else:
+                    logger.info(f"Movement for {category.name}: {movement_value} (consumption)")
+
+                # Skip if there's no movement
+                if movement_value == 0:
+                    continue
+
+                # Create total consumption/increase record
                 CategoryConsumptionTotal.objects.create(
                     report=report,
                     category=category,
-                    count=consumption_value
+                    count=movement_value
                 )
 
-                # Skip generating data points if no consumption
-                if consumption_value <= 0:
-                    continue
+                logger.info(f"Created consumption total for {category.name}: {movement_value}")
 
-                # Generate consumption data points based on period type
-                if period_type == 'weekly':
-                    # For weekly analysis, generate daily data points with random distribution
-                    remaining = consumption_value
+                # Generate data points based on period type
+                logger.info(f"Generating daily data points for {category.name}")
 
-                    for i in range(days):
-                        day_date = start_date + datetime.timedelta(days=i)
+                # Create a single data point with the appropriate note
+                note = "Aumento" if is_increase else "Consumo"
 
-                        # Calculate consumption for this day
-                        if i == days - 1:
-                            # Last day gets remaining consumption
-                            daily_consumption = remaining
-                        else:
-                            # Random consumption that doesn't exceed remaining
-                            max_daily = max(1, int(remaining / (days - i)))
-                            daily_consumption = random.randint(0, max_daily)
+                ConsumptionDataPoint.objects.create(
+                    report=report,
+                    category=category,
+                    date=start_date,
+                    count=movement_value,
+                    note=note  # Set the appropriate note based on movement direction
+                )
 
-                        # Update remaining consumption
-                        remaining -= daily_consumption
-
-                        # Create data point if there was consumption
-                        if daily_consumption > 0:
-                            ConsumptionDataPoint.objects.create(
-                                report=report,
-                                category=category,
-                                date=day_date,
-                                count=daily_consumption
-                            )
-
-                elif period_type == 'monthly':
-                    # For monthly analysis, group by weeks
-                    weeks = (days // 7) + (1 if days % 7 > 0 else 0)
-                    remaining = consumption_value
-
-                    for i in range(weeks):
-                        week_start = start_date + datetime.timedelta(days=i * 7)
-
-                        # Calculate consumption for this week
-                        if i == weeks - 1:
-                            # Last week gets remaining consumption
-                            weekly_consumption = remaining
-                        else:
-                            # Random consumption that doesn't exceed remaining
-                            max_weekly = max(1, int(remaining / (weeks - i)))
-                            weekly_consumption = random.randint(0, max_weekly)
-
-                        # Update remaining consumption
-                        remaining -= weekly_consumption
-
-                        # Create data point if there was consumption
-                        if weekly_consumption > 0:
-                            ConsumptionDataPoint.objects.create(
-                                report=report,
-                                category=category,
-                                date=week_start,
-                                count=weekly_consumption,
-                                note=f'Semana {i + 1}'
-                            )
+                logger.info(f"Created data point: {category.name}, date: {start_date}, count: {movement_value}")
 
             serializer = AnalyticsReportSerializer(report)
+            logger.info(f"Report created successfully. Response data: {serializer.data}")
             return Response(serializer.data)
 
         except InventorySnapshot.DoesNotExist:
@@ -586,6 +570,7 @@ class AnalyticsReportViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
+            logger.error(f"Error generating report: {str(e)}")
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

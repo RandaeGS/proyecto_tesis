@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'; // Para debugPrint
+
 /// Model to represent an analytics report of product consumption
 class AnalyticsReport {
   final String id;
@@ -67,73 +69,203 @@ class AnalyticsReport {
 
   /// Creates an instance from a JSON map
   factory AnalyticsReport.fromJson(Map<String, dynamic> json) {
-    // Convert consumption data
-    final Map<String, List<ConsumptionDataPoint>> consumption = {};
+    try {
+      debugPrint('Creating AnalyticsReport from JSON: ${json['name']}');
 
-    if (json['data_points'] != null) {
-      final List<dynamic> dataPoints = json['data_points'];
+      // Convert consumption data
+      final Map<String, List<ConsumptionDataPoint>> consumption = {};
 
-      // Group data points by category
-      final Map<String, List<dynamic>> pointsByCategory = {};
-      for (var point in dataPoints) {
-        final categoryName = point['category_name'] as String;
-        if (!pointsByCategory.containsKey(categoryName)) {
-          pointsByCategory[categoryName] = [];
+      if (json['data_points'] != null) {
+        final List<dynamic> dataPoints = json['data_points'];
+        debugPrint('Found ${dataPoints.length} data points');
+
+        // Group data points by category
+        final Map<String, List<dynamic>> pointsByCategory = {};
+        for (var point in dataPoints) {
+          try {
+            // El problema está aquí - necesitamos usar el nombre de la categoría o la referencia correcta
+            String categoryName;
+
+            // Primero intentar obtener el category_name directamente
+            if (point['category_name'] != null) {
+              categoryName = point['category_name'].toString();
+            }
+            // Si no está disponible, intenta buscar la categoría por ID
+            else if (point['category'] != null) {
+              // Buscamos la categoría correspondiente en consumption_totals
+              final categoryId = point['category'];
+              final matchingTotal = json['consumption_totals']?.firstWhere(
+                      (total) => total['category'] == categoryId,
+                  orElse: () => null
+              );
+
+              if (matchingTotal != null && matchingTotal['category_name'] != null) {
+                categoryName = matchingTotal['category_name'].toString();
+              } else {
+                // Si no podemos encontrar el nombre, usamos el ID como string
+                categoryName = 'Categoría ${categoryId.toString()}';
+              }
+            } else {
+              // Si no hay manera de identificar la categoría, saltamos este punto
+              continue;
+            }
+
+            if (!pointsByCategory.containsKey(categoryName)) {
+              pointsByCategory[categoryName] = [];
+            }
+            pointsByCategory[categoryName]!.add(point);
+          } catch (e) {
+            debugPrint('Error processing data point: $e');
+            // Continue with the next point
+          }
         }
-        pointsByCategory[categoryName]!.add(point);
+
+        // Convert to ConsumptionDataPoint objects
+        pointsByCategory.forEach((category, points) {
+          try {
+            consumption[category] = points
+                .map((point) => ConsumptionDataPoint.fromJson(point))
+                .toList();
+            debugPrint('Added ${points.length} data points for $category');
+          } catch (e) {
+            debugPrint('Error converting data points for $category: $e');
+            // If there's an error, use an empty list
+            consumption[category] = [];
+          }
+        });
       }
 
-      // Convert to ConsumptionDataPoint objects
-      pointsByCategory.forEach((category, points) {
-        consumption[category] = points
-            .map((point) => ConsumptionDataPoint.fromJson(point))
-            .toList();
-      });
-    }
+      // Convert total consumption
+      final Map<String, int> total = {};
 
-    // Convert total consumption
-    final Map<String, int> total = {};
+      if (json['consumption_totals'] != null) {
+        final List<dynamic> totals = json['consumption_totals'];
+        debugPrint('Found ${totals.length} consumption totals');
 
-    if (json['consumption_totals'] != null) {
-      final List<dynamic> totals = json['consumption_totals'];
-
-      for (var item in totals) {
-        final categoryName = item['category_name'] as String;
-        final count = item['count'] as int;
-        total[categoryName] = count;
+        for (var item in totals) {
+          try {
+            if (item['category_name'] != null) {
+              final categoryName = item['category_name'].toString();
+              final count = item['count'] is int
+                  ? item['count']
+                  : int.tryParse(item['count'].toString()) ?? 0;
+              total[categoryName] = count;
+            }
+          } catch (e) {
+            debugPrint('Error processing consumption total: $e');
+            // Continue with the next item
+          }
+        }
       }
-    }
 
-    // Get date range
-    DateRange range;
-    if (json['date_range'] != null) {
-      range = DateRange.fromJson(json['date_range']);
-    } else {
-      // Create from start_date and end_date
-      range = DateRange(
-        startDate: json['start_date'] ?? '',
-        endDate: json['end_date'] ?? '',
+      // Get categories with null-safety
+      List<String> categories = [];
+      if (json['categories'] != null) {
+        try {
+          if (json['categories'] is List) {
+            categories = (json['categories'] as List)
+                .map((item) => item?.toString() ?? "")
+                .where((item) => item.isNotEmpty)
+                .toList();
+          }
+        } catch (e) {
+          debugPrint('Error extracting categories: $e');
+        }
+      }
+
+      // If categories is still empty, try to get from consumption totals
+      if (categories.isEmpty && json['consumption_totals'] != null) {
+        try {
+          final List<dynamic> totals = json['consumption_totals'];
+          final Set<String> categorySet = {};
+
+          for (var item in totals) {
+            if (item != null && item['category_name'] != null) {
+              categorySet.add(item['category_name'].toString());
+            }
+          }
+
+          categories = categorySet.toList();
+        } catch (e) {
+          debugPrint('Error extracting categories from totals: $e');
+        }
+      }
+
+      // Extract date range (safe version)
+      DateRange dateRange;
+      try {
+        if (json['date_range'] != null && json['date_range'] is Map) {
+          final startDate = json['date_range']['startDate']?.toString() ?? '';
+          final endDate = json['date_range']['endDate']?.toString() ?? '';
+          dateRange = DateRange(startDate: startDate, endDate: endDate);
+        } else {
+          // Fallback: use start_date and end_date directly
+          final startDate = json['start_date']?.toString() ?? '';
+          final endDate = json['end_date']?.toString() ?? '';
+          dateRange = DateRange(startDate: startDate, endDate: endDate);
+        }
+      } catch (e) {
+        debugPrint('Error parsing date range: $e');
+        dateRange = DateRange(
+          startDate: DateTime.now().toIso8601String(),
+          endDate: DateTime.now().toIso8601String(),
+        );
+      }
+
+      // Extract all other properties with null safety
+      final String id = json['id']?.toString() ?? '';
+      final String name = json['name']?.toString() ?? 'Reporte';
+      final String createdAt = json['created_at']?.toString() ?? DateTime.now().toIso8601String();
+
+      int centerId;
+      try {
+        if (json['center'] is int) {
+          centerId = json['center'];
+        } else {
+          centerId = int.tryParse(json['center']?.toString() ?? '0') ?? 0;
+        }
+      } catch (e) {
+        debugPrint('Error parsing centerId: $e');
+        centerId = 0;
+      }
+
+      final String periodType = json['period_type']?.toString() ?? 'weekly';
+
+      // Extract snapshot IDs safely
+      String? startSnapshotId;
+      String? endSnapshotId;
+      try {
+        startSnapshotId = json['start_snapshot']?.toString();
+        endSnapshotId = json['end_snapshot']?.toString();
+      } catch (e) {
+        debugPrint('Error extracting snapshot IDs: $e');
+      }
+
+      // Create the report
+      final report = AnalyticsReport.withStringPeriodType(
+        id: id,
+        name: name,
+        createdAt: createdAt,
+        centerId: centerId,
+        categories: categories,
+        dateRange: dateRange,
+        periodType: periodType,
+        consumptionData: consumption,
+        totalConsumption: total,
+        startSnapshotId: startSnapshotId,
+        endSnapshotId: endSnapshotId,
       );
-    }
 
-    // Use the alternative constructor with direct string period type
-    return AnalyticsReport.withStringPeriodType(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      createdAt: json['created_at'] ?? '',
-      centerId: json['center'] is int
-          ? json['center']
-          : int.tryParse(json['center'].toString()) ?? 0,
-      categories: json['categories'] != null
-          ? List<String>.from(json['categories'])
-          : [],
-      dateRange: range,
-      periodType: json['period_type'] ?? 'weekly', // Use string directly
-      consumptionData: consumption,
-      totalConsumption: total,
-      startSnapshotId: json['start_snapshot'],
-      endSnapshotId: json['end_snapshot'],
-    );
+      debugPrint('Parsed report: ${report.name}');
+      debugPrint('Categories: ${report.categories}');
+      debugPrint('Total consumption: ${report.totalConsumption}');
+      debugPrint('Consumption data points: ${report.consumptionData.values.fold(0, (prev, list) => prev + list.length)}');
+
+      return report;
+    } catch (e) {
+      debugPrint('Error creating AnalyticsReport: $e');
+      rethrow; // Re-lanzar la excepción para que se maneje en niveles superiores
+    }
   }
 
   /// Converts the instance to a JSON map
@@ -265,22 +397,64 @@ class ConsumptionDataPoint {
 
   /// Creates an instance from a JSON map
   factory ConsumptionDataPoint.fromJson(Map<String, dynamic> json) {
-    return ConsumptionDataPoint(
-      date: json['date'] ?? '',
-      count: json['count'] is int
-          ? json['count']
-          : int.tryParse(json['count'].toString()) ?? 0,
-      note: json['note'],
-    );
+    try {
+      // Debug the fields
+      if (kDebugMode) {
+        print('DataPoint JSON: $json');
+      }
+
+      // Extract date with null-safety
+      String dateStr = '';
+      if (json['date'] != null) {
+        dateStr = json['date'].toString();
+      }
+
+      // Extract count with null-safety
+      int countValue = 0;
+      if (json['count'] != null) {
+        if (json['count'] is int) {
+          countValue = json['count'];
+        } else {
+          countValue = int.tryParse(json['count'].toString()) ?? 0;
+        }
+      }
+
+      // Extract note safely - this is where the error is happening
+      String? noteValue;
+      if (json.containsKey('note') && json['note'] != null) {
+        noteValue = json['note'].toString();
+      }
+
+      return ConsumptionDataPoint(
+        date: dateStr,
+        count: countValue,
+        note: noteValue,
+      );
+    } catch (e) {
+      debugPrint('Error creating ConsumptionDataPoint: $e');
+      // Return a default object in case of error
+      return ConsumptionDataPoint(
+        date: DateTime.now().toIso8601String(),
+        count: 0,
+        note: null,
+      );
+    }
   }
 
   /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
-    return {
+    // Create the base map first
+    final Map<String, dynamic> map = {
       'date': date,
       'count': count,
-      if (note != null) 'note': note,
     };
+
+    // Add the note only if it's not null
+    if (note != null) {
+      map['note'] = note;
+    }
+
+    return map;
   }
 
   /// Gets the DateTime object
@@ -301,6 +475,11 @@ class ConsumptionDataPoint {
       return date;
     }
   }
+
+  bool isIncrease() {
+    if (note == null) return false;
+    return note!.toLowerCase().contains('aumento');
+  }
 }
 
 /// Date range for analysis
@@ -315,10 +494,18 @@ class DateRange {
 
   /// Creates an instance from a JSON map
   factory DateRange.fromJson(Map<String, dynamic> json) {
-    return DateRange(
-      startDate: json['startDate'] ?? '',
-      endDate: json['endDate'] ?? '',
-    );
+    try {
+      return DateRange(
+        startDate: json['startDate']?.toString() ?? '',
+        endDate: json['endDate']?.toString() ?? '',
+      );
+    } catch (e) {
+      debugPrint('Error creating DateRange from JSON: $e');
+      return DateRange(
+          startDate: '',
+          endDate: ''
+      );
+    }
   }
 
   /// Converts the instance to a JSON map

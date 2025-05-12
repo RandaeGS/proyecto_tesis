@@ -37,19 +37,40 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
   }
 
   Future<void> _initialize() async {
+    // Primero establecemos el estado inicial
     setState(() {
       _centerId = Provider.of<AuthProvider>(context, listen: false).centerId;
-      _isLoading = false;
+      _isLoading = false; // Empezamos con loading = false para evitar problemas
     });
 
     if (_centerId != null) {
-      // Load existing analytics reports
-      await Provider.of<AnalyticsProvider>(context, listen: false)
-          .loadReports(_centerId!);
+      // Debemos usar Future.microtask para evitar llamar a Provider durante el build
+      Future.microtask(() async {
+        // Intentamos cargar los datos en segundo plano
+        try {
+          // Marcar como loading antes de cargar
+          setState(() {
+            _isLoading = true;
+          });
 
-      // Load snapshots for selection
-      await Provider.of<InventoryComparisonProvider>(context, listen: false)
-          .loadInventorySnapshots(_centerId!);
+          // Load existing analytics reports
+          await Provider.of<AnalyticsProvider>(context, listen: false)
+              .loadReports(_centerId!);
+
+          // Load snapshots for selection
+          await Provider.of<InventoryComparisonProvider>(context, listen: false)
+              .loadInventorySnapshots(_centerId!);
+        } catch (e) {
+          debugPrint('Error al inicializar: $e');
+        } finally {
+          // Marcar como no loading al finalizar
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
+        }
+      });
     }
   }
 
@@ -324,12 +345,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
                     Icons.category,
                   ),
                   _buildStatColumn(
-                    'Consumo Total',
+                    'Movimiento Total',
                     totalConsumption.toString(),
                     Icons.shopping_basket,
                   ),
                   _buildStatColumn(
-                    'Mayor Consumo',
+                    'Mayor Movimiento',
                     maxConsumptionCategory != 'N/A'
                         ? maxConsumptionCategory.split(' ').first
                         : 'N/A',
