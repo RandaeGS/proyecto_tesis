@@ -116,6 +116,11 @@ class AuthProvider with ChangeNotifier {
 
       // Cargar información completa del usuario y sus centros
       await loadUserWithCenters();
+
+      // Limpiar cualquier mensaje de error previo
+      _errorMessage = '';
+
+      debugPrint('Login exitoso - isAuthenticated: $_isAuthenticated, token: ${_token?.substring(0, 10)}...');
     } catch (e) {
       debugPrint('Error en login: $e');
       _isAuthenticated = false;
@@ -124,6 +129,7 @@ class AuthProvider with ChangeNotifier {
       _centerId = null;
       _userCenter = null;
       _errorMessage = _handleError(e);
+      rethrow; // Propagar el error para que LoginScreen lo maneje
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -203,6 +209,9 @@ class AuthProvider with ChangeNotifier {
       throw 'Usuario no autenticado';
     }
 
+    _isLoading = true;
+    notifyListeners();
+
     try {
       // Cargar información del usuario guardado
       _user = await _authService.getSavedUser();
@@ -226,39 +235,31 @@ class AuthProvider with ChangeNotifier {
       if (userData.containsKey('centers') &&
           userData['centers'] is List &&
           (userData['centers'] as List).isNotEmpty) {
-
-        final centerData = userData['centers'][0]; // Tomamos el primer centro
+        final centerData = userData['centers'][0];
         _userCenter = app_center.Center.fromJson(centerData);
         _centerId = _userCenter?.id;
-
         debugPrint('Centro actualizado: ${_userCenter?.name} (ID: $_centerId)');
       } else {
         debugPrint('El usuario no tiene centros asignados');
-
-        // Intentar cargar centros desde otro endpoint
         final centers = await _authService.getUserCenters();
         if (centers.isNotEmpty) {
           _userCenter = centers.first;
           _centerId = _userCenter?.id;
-          debugPrint('Centro cargado desde endpoint alternativo: ${_userCenter?.name} (ID: $_centerId)');
         } else {
-          _userCenter = null;
-          _centerId = null;
           throw 'El usuario no tiene centros asignados';
         }
       }
-
-      notifyListeners();
     } catch (e) {
-      debugPrint('Error al cargar información completa del usuario: $e');
+      debugPrint('Error al cargar información del usuario: $e');
       _errorMessage = _handleError(e);
       if (_errorMessage.contains('Usuario no autenticado') ||
           _errorMessage.contains('No autorizado') ||
-          _errorMessage.contains('401') ||
-          _errorMessage.contains('no tiene centros')) {
-        // Limpiar la sesión si es un error de autenticación
+          _errorMessage.contains('401')) {
         await logout();
       }
+      rethrow;
+    } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }

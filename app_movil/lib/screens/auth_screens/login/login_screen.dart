@@ -98,17 +98,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   onLogin: (email, password) async {
                     try {
                       await authProvider.login(email, password);
+
+                      // Verificar explícitamente el estado después del login
+                      if (authProvider.isAuthenticated && mounted) {
+                        // Navegar al home screen
+                        Navigator.of(context).pushReplacementNamed('/home');
+                      }
                     } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(e.toString()),
                             backgroundColor: Colors.red,
-                            behavior: SnackBarBehavior.floating,
-                            margin: const EdgeInsets.all(16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
                           ),
                         );
                       }
