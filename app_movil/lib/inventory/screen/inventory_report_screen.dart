@@ -165,6 +165,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
     }
   }
 
+
   Future<void> _saveConfiguration() async {
     try {
       if (_centerId == null) return;
@@ -173,6 +174,10 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('ideal_counts_${_centerId}', json.encode(_customIdealCounts));
+
+      // NUEVA PARTE: Actualizar los informes existentes con las nuevas cantidades ideales
+      Provider.of<InventoryReportProvider>(context, listen: false)
+          .updateIdealCountsInReports(_customIdealCounts);
 
       debugPrint('Configuración guardada: $_customIdealCounts');
 

@@ -150,4 +150,23 @@ class ProductReplenishmentInfo {
     if (idealCount == 0) return 0.0;
     return (replenishAmount / idealCount) * 100;
   }
+
+  /// Creates a copy with updated values
+  ProductReplenishmentInfo copyWith({
+    String? category,
+    int? currentCount,
+    int? idealCount,
+    int? priority,
+    String? note,
+    int? categoryId,
+  }) {
+    return ProductReplenishmentInfo(
+      category: category ?? this.category,
+      currentCount: currentCount ?? this.currentCount,
+      idealCount: idealCount ?? this.idealCount,
+      priority: priority ?? this.priority,
+      note: note ?? this.note,
+      categoryId: categoryId ?? this.categoryId,
+    );
+  }
 }
