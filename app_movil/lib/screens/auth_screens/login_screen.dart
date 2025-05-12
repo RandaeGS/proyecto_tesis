@@ -4,7 +4,12 @@ import 'package:provider/provider.dart';
 import '../../services/auth_services/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String? redirectMessage;
+
+  const LoginScreen({
+    super.key,
+    this.redirectMessage,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -15,11 +20,30 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  String? _redirectMessage;
 
   @override
   void initState() {
     super.initState();
+
+    _redirectMessage = widget.redirectMessage;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Si hay un mensaje de redirección, mostrarlo
+      if (_redirectMessage != null && _redirectMessage!.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_redirectMessage!),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+
       context.read<AuthProvider>().initializeAuth();
     });
   }
@@ -228,6 +252,31 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Text(
                         authProvider.errorMessage,
                         style: TextStyle(color: Colors.red.shade800),
+                      ),
+                    ),
+                  ],
+
+                  // Mostrar mensaje de redirección si existe
+                  if (_redirectMessage != null && _redirectMessage!.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.orange.shade800),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _redirectMessage!,
+                              style: TextStyle(color: Colors.orange.shade800),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

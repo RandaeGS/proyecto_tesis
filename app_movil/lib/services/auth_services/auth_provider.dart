@@ -34,6 +34,7 @@ class AuthProvider with ChangeNotifier {
     if (_isInitialized) return;
 
     _isLoading = true;
+    _errorMessage = '';
     notifyListeners();
 
     try {
@@ -44,13 +45,35 @@ class AuthProvider with ChangeNotifier {
         // Cargar información del usuario
         _user = await _authService.getSavedUser();
 
-        // Cargar información del centro
-        _userCenter = await _authService.getSavedCenter();
-        _centerId = _userCenter?.id;
+        // Si no se encontró usuario local, considerar la sesión inválida
+        if (_user == null) {
+          _isAuthenticated = false;
+          _token = null;
+          _errorMessage = 'No se encontró información del usuario. Inicie sesión nuevamente.';
+          await _authService.logout();
+        } else {
+          // Obtener el token actual
+          _token = await _authService.getToken();
 
-        if (_userCenter == null && _user != null) {
-          // Si tenemos usuario pero no centro, intentar cargar el centro
-          await loadUserWithCenters();
+          // Cargar información del centro
+          _userCenter = await _authService.getSavedCenter();
+          _centerId = _userCenter?.id;
+
+          if (_userCenter == null && _user != null) {
+            // Si tenemos usuario pero no centro, intentar cargar el centro
+            try {
+              await loadUserWithCenters();
+
+              // Si después de intentar cargar el centro sigue sin existir,
+              // probablemente hay un problema con la sesión
+              if (_userCenter == null) {
+                _errorMessage = 'No se pudo cargar información del centro. La sesión podría haber expirado.';
+              }
+            } catch (e) {
+              _errorMessage = 'Error al cargar información del centro: $e';
+              debugPrint('Error al cargar centro en initializeAuth: $e');
+            }
+          }
         }
       }
     } catch (e) {
@@ -221,34 +244,85 @@ class AuthProvider with ChangeNotifier {
         } else {
           _userCenter = null;
           _centerId = null;
+          throw 'El usuario no tiene centros asignados';
         }
       }
 
       notifyListeners();
     } catch (e) {
       debugPrint('Error al cargar información completa del usuario: $e');
-      // No hacemos fallar todo el proceso si esto falla
+      _errorMessage = _handleError(e);
+      if (_errorMessage.contains('Usuario no autenticado') ||
+          _errorMessage.contains('No autorizado') ||
+          _errorMessage.contains('401') ||
+          _errorMessage.contains('no tiene centros')) {
+        // Limpiar la sesión si es un error de autenticación
+        await logout();
+      }
+      notifyListeners();
     }
   }
 
   /// Actualiza la información del centro
   Future<void> refreshCenterInfo() async {
     _isLoading = true;
+    _errorMessage = '';
     notifyListeners();
 
     try {
       if (_isAuthenticated && _user != null) {
-        await loadUserWithCenters();
+        // Intentar obtener información del usuario en el backend
+        try {
+          await loadUserWithCenters();
+        } catch (e) {
+          debugPrint('Error al cargar información completa del usuario: $e');
+          _errorMessage = _handleError(e);
+
+          // Asegurarnos de propagar el error original
+          // IMPORTANTE: Aquí es donde propagamos el error de conexión para que el home_screen lo capture
+          throw e;
+        }
       } else {
         debugPrint('No hay usuario autenticado para refrescar el centro');
+        throw 'No hay usuario autenticado';
       }
     } catch (e) {
       debugPrint('Error al refrescar información del centro: $e');
       _errorMessage = _handleError(e);
+
+      // Propagar el error para que el HomeScreen lo capture
+      throw e;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Verifica si la sesión actual es válida
+  /// Retorna true si la sesión es válida, false si no lo es
+  Future<bool> validateSession() async {
+    if (!_isInitialized) {
+      await initializeAuth();
+    }
+
+    if (!_isAuthenticated || _token == null) {
+      return false;
+    }
+
+    // Verificar si tenemos el token pero no el usuario o centro
+    if (_user == null || _userCenter == null) {
+      try {
+        await loadUserWithCenters();
+        // Si después de cargar sigue sin haber usuario o centro, la sesión no es válida
+        return _user != null && _userCenter != null;
+      } catch (e) {
+        debugPrint('Error al validar sesión: $e');
+        _errorMessage = _handleError(e);
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /// Maneja y formatea los errores para mostrarlos al usuario
@@ -265,6 +339,10 @@ class AuthProvider with ChangeNotifier {
 
     if (error.toString().contains('401') || error.toString().contains('403')) {
       return 'Error de autenticación: credenciales incorrectas o permisos insuficientes';
+    }
+
+    if (error.toString().contains('sesión') || error.toString().contains('token')) {
+      return 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.';
     }
 
     return 'Error de autenticación: ${error.toString()}';

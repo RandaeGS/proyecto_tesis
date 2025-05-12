@@ -270,7 +270,7 @@ class InventoryReportViewSet(viewsets.ModelViewSet):
             # Get the snapshot
             snapshot = InventorySnapshot.objects.get(id=snapshot_id)
 
-            # Create a name for the report
+            # Create a name for the report  
             now = datetime.datetime.now()
             report_name = f"{'Informe de Emergencia' if is_emergency else 'Informe de Reposicion'} {now.day}/{now.month}/{now.year}"
 

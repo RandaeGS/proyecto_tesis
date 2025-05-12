@@ -25,7 +25,11 @@ class UserProvider with ChangeNotifier {
 
   /// Maneja errores de autorización
   void _handleAuthError(String error) async {
-    if (error.contains('No autorizado') || error.contains('401') || error.contains('403')) {
+    if (error.contains('No autorizado') ||
+        error.contains('401') ||
+        error.contains('403') ||
+        error.contains('token') ||
+        error.contains('sesión ha expirado')) {
       debugPrint('Error de autorización detectado: $error');
       // Si es un error de autorización, notificamos para que se vuelva a iniciar sesión
       await _authService.logout();
@@ -42,6 +46,7 @@ class UserProvider with ChangeNotifier {
       final user = await _authService.getSavedUser();
       if (user == null) {
         debugPrint('No hay usuario autenticado');
+        _errorMessage = 'No hay usuario autenticado';
         return null;
       }
 
@@ -69,9 +74,13 @@ class UserProvider with ChangeNotifier {
       }
 
       debugPrint('El usuario no tiene centros asignados según la API');
+      _errorMessage = 'El usuario no tiene centros asignados';
       return null;
     } catch (e) {
       debugPrint('Error al obtener centerId desde API: $e');
+
+      // Manejar el error como posible error de autorización
+      _handleAuthError(e.toString());
 
       // Si falla la petición al API, intentar con datos guardados como fallback
       try {

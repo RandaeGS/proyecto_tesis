@@ -11,6 +11,7 @@ import '../inventory/services/inventory_comparison_provider.dart';
 import '../inventory/services/inventory_report_provider.dart';
 import '../inventory/services/product_data_provider.dart';
 import '../services/auth_services/auth_provider.dart';
+import '../services/auth_services/session_manager.dart';
 import '../services/deteccion_services/image_analisys_service.dart';
 import '../services/user_provider.dart';
 import 'image_capture_screen.dart';
@@ -25,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = false;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -35,35 +37,132 @@ class _HomeScreenState extends State<HomeScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       if (authProvider.isAuthenticated) {
         _loadCenterInfo();
+      } else {
+        // Si no está autenticado, redirigir al login
+        _redirectToLogin('No hay sesión activa');
       }
     });
+  }
+
+  // Método para redirigir al login
+  Future<void> _redirectToLogin(String reason) async {
+    debugPrint('Redirigiendo al login: $reason');
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    await authProvider.logout();
+
+    if (mounted) {
+      // Navegar al login inmediatamente y resetear todas las rutas
+      Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+              (route) => false,
+          arguments: reason
+      );
+    }
   }
 
   Future<void> _loadCenterInfo() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = '';
     });
 
     try {
       // Primero intentamos cargar la información desde el provider de autenticación
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.refreshCenterInfo();
+
+      try {
+        await authProvider.refreshCenterInfo();
+      } catch (e) {
+        debugPrint('Error al actualizar información del centro: $e');
+
+        String errorMsg = e.toString();
+
+        // Verificar si es un error de conexión
+        if (errorMsg.contains('conexión') ||
+            errorMsg.contains('Connection') ||
+            errorMsg.contains('internet') ||
+            errorMsg.contains('refused') ||
+            errorMsg.contains('SocketException')) {
+
+          if (mounted) {
+            // Redirección inmediata en caso de error de conexión
+            await _redirectToLogin('No se pudo conectar al servidor. Verifique su conexión e intente nuevamente.');
+            return; // Importante: salir del método inmediatamente
+          }
+        }
+
+        // Si llegamos aquí, no es error de conexión - continuar con el flujo normal
+        // pero guardar el mensaje de error para mostrarlo
+        setState(() {
+          _errorMessage = errorMsg;
+        });
+      }
 
       // Si no tenemos un centro, intentamos obtenerlo desde el UserProvider
       if (authProvider.userCenter == null) {
         final userProvider = Provider.of<UserProvider>(context, listen: false);
-        final centerId = await userProvider.getCurrentUserCenterId(context);
 
-        if (centerId != null) {
-          debugPrint('Centro obtenido desde UserProvider: $centerId');
+        try {
+          final centerId = await userProvider.getCurrentUserCenterId(context);
 
-          // Intentar obtener y actualizar los detalles del centro
-          if (userProvider.currentCenter != null) {
-            // Notificar al AuthProvider sobre el nuevo centro
-            await authProvider.updateCenterInfo(userProvider.currentCenter!);
+          // Verificar si hay error en userProvider
+          if (userProvider.errorMessage.isNotEmpty) {
+            // Verificar específicamente si es un error de conexión
+            if (userProvider.errorMessage.contains('conexión') ||
+                userProvider.errorMessage.contains('Connection') ||
+                userProvider.errorMessage.contains('internet') ||
+                userProvider.errorMessage.contains('refused') ||
+                userProvider.errorMessage.contains('SocketException')) {
 
-            debugPrint('Información del centro actualizada: ${userProvider.currentCenter!.name}');
+              if (mounted) {
+                await _redirectToLogin('No se pudo conectar al servidor. Verifique su conexión e intente nuevamente.');
+                return;
+              }
+            }
+
+            // Si llegamos aquí, no es error de conexión,
+            // pero hay otro tipo de error - guardarlo para mostrarlo
+            setState(() {
+              _errorMessage = userProvider.errorMessage;
+            });
           }
+
+          if (centerId != null) {
+            debugPrint('Centro obtenido desde UserProvider: $centerId');
+
+            // Intentar obtener y actualizar los detalles del centro
+            if (userProvider.currentCenter != null) {
+              // Notificar al AuthProvider sobre el nuevo centro
+              await authProvider.updateCenterInfo(userProvider.currentCenter!);
+              debugPrint('Información del centro actualizada: ${userProvider.currentCenter!.name}');
+            }
+          } else {
+            // Si no se pudo obtener el centerId
+            setState(() {
+              _errorMessage = 'No se pudo obtener información del centro';
+            });
+          }
+        } catch (e) {
+          debugPrint('Error al obtener centerId: $e');
+
+          // Verificar si es un error de conexión
+          if (e.toString().contains('conexión') ||
+              e.toString().contains('Connection') ||
+              e.toString().contains('internet') ||
+              e.toString().contains('refused') ||
+              e.toString().contains('SocketException')) {
+
+            if (mounted) {
+              await _redirectToLogin('No se pudo conectar al servidor. Verifique su conexión e intente nuevamente.');
+              return;
+            }
+          }
+
+          // Si no es error de conexión, guardar el mensaje para mostrarlo
+          setState(() {
+            _errorMessage = e.toString();
+          });
         }
       }
 
@@ -94,31 +193,87 @@ class _HomeScreenState extends State<HomeScreen> {
             productDataProvider.setAuthToken(authProvider.token!);
           }
 
-          // Load data sequentially to avoid conflicts
-          await productDataProvider.loadProductData(authProvider.centerId!);
+          // Cargar datos de productos
+          try {
+            await productDataProvider.loadProductData(authProvider.centerId!);
+          } catch (e) {
+            debugPrint('Error al cargar datos de productos: $e');
+
+            // Verificar si es un error de conexión
+            if (e.toString().contains('conexión') ||
+                e.toString().contains('Connection') ||
+                e.toString().contains('internet') ||
+                e.toString().contains('refused') ||
+                e.toString().contains('SocketException')) {
+
+              if (mounted) {
+                await _redirectToLogin('No se pudo conectar al servidor. Verifique su conexión e intente nuevamente.');
+                return;
+              }
+            }
+
+            // Si no es error de conexión, solo registrar el error
+            // pero continuar con la carga de la pantalla principal
+            setState(() {
+              _errorMessage = 'Error al cargar datos de productos: $e';
+            });
+          }
 
           // After product data is loaded, then load other data
           final inventoryProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
           inventoryProvider.setProductDataProvider(productDataProvider);
-          await inventoryProvider.loadInventorySnapshots(authProvider.centerId!);
+
+          try {
+            await inventoryProvider.loadInventorySnapshots(authProvider.centerId!);
+          } catch (e) {
+            debugPrint('Error al cargar instantáneas de inventario: $e');
+            // Solo registrar el error, continuaremos cargando el resto de datos
+            // No redirigir al login por este error
+          }
 
           // Finally load reports
-          await Provider.of<InventoryReportProvider>(context, listen: false)
-              .loadReports(authProvider.centerId!);
+          final reportProvider = Provider.of<InventoryReportProvider>(context, listen: false);
+
+          try {
+            await reportProvider.loadReports(authProvider.centerId!);
+          } catch (e) {
+            debugPrint('Error al cargar informes: $e');
+            // Solo registrar el error, continuaremos mostrando la pantalla
+            // No redirigir al login por este error
+          }
 
           debugPrint('Datos del centro cargados correctamente');
         } catch (e) {
           debugPrint('Error loading provider data: $e');
+          setState(() {
+            _errorMessage = e.toString();
+          });
         }
+      } else {
+        // Si no hay centerId, mostrar un error pero no redirigir automáticamente
+        setState(() {
+          _errorMessage = 'No se pudo determinar el ID del centro';
+        });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al cargar información del centro: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        debugPrint('Error al cargar información del centro: $e');
+
+        // Verificar si es un error de conexión
+        if (e.toString().contains('conexión') ||
+            e.toString().contains('Connection') ||
+            e.toString().contains('internet') ||
+            e.toString().contains('refused') ||
+            e.toString().contains('SocketException')) {
+
+          await _redirectToLogin('No se pudo conectar al servidor. Verifique su conexión e intente nuevamente.');
+          return;
+        }
+
+        // Si no es error de conexión, solo mostrar el error
+        setState(() {
+          _errorMessage = 'Error al cargar información: $e';
+        });
       }
     } finally {
       if (mounted) {
@@ -163,6 +318,71 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Mostrar mensaje de error si existe
+                if (_errorMessage.isNotEmpty) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.error_outline, color: Colors.red.shade700),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Error',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _errorMessage,
+                          style: TextStyle(color: Colors.red.shade700),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _loadCenterInfo,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red.shade700,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Reintentar'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  _redirectToLogin('Redirigiendo al login');
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Ir a Login'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Información del usuario
                 Card(
                   elevation: 2,
@@ -580,7 +800,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 await Provider.of<AuthProvider>(context, listen: false)
                     .logout();
                 if (context.mounted) {
-                  Navigator.of(context).pushReplacementNamed('/');
+                  Navigator.of(context).pushReplacementNamed('/login');
                 }
               },
             ),

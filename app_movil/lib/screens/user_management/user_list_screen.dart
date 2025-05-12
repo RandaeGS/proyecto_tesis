@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../services/auth_services/auth_provider.dart';
+import '../../../services/auth_services/session_manager.dart'; // Importar el SessionManager
 import '../../../entities/user.dart';
 import '../../../entities/center.dart' as app_center;
 import '../../../services/user_provider.dart';
@@ -34,8 +35,22 @@ class _UserListScreenState extends State<UserListScreen> {
     setState(() => _isInitializing = true);
 
     try {
+      // Verificar si la sesión es válida
+      final isSessionValid = await SessionManager.validateSession(context);
+      if (!isSessionValid) {
+        return; // El SessionManager ya se encargó de la redirección
+      }
+
       // Obtener el ID del centro del usuario actual
       _centerId = await _userProvider.getCurrentUserCenterId(context);
+
+      // Verificar si hay error de autenticación después de obtener el centerId
+      if (_userProvider.errorMessage.isNotEmpty) {
+        if (mounted) {
+          await SessionManager.checkSessionAndRedirect(context, _userProvider.errorMessage);
+          return;
+        }
+      }
 
       if (_centerId == null) {
         if (mounted) {
@@ -46,6 +61,9 @@ class _UserListScreenState extends State<UserListScreen> {
             ),
           );
           setState(() => _isInitializing = false);
+
+          // Redirigir al login porque no se encontró centro
+          await SessionManager.checkSessionAndRedirect(context, 'Centro no encontrado');
         }
         return;
       }
@@ -61,6 +79,9 @@ class _UserListScreenState extends State<UserListScreen> {
           ),
         );
         setState(() => _isInitializing = false);
+
+        // Verificar si debemos redirigir al login por el error
+        await SessionManager.checkSessionAndRedirect(context, e.toString());
       }
     }
   }
@@ -69,6 +90,13 @@ class _UserListScreenState extends State<UserListScreen> {
     if (_centerId != null) {
       try {
         await _userProvider.loadUsers(_centerId!);
+
+        // Verificar si hay error después de cargar los usuarios
+        if (_userProvider.errorMessage.isNotEmpty) {
+          if (mounted) {
+            await SessionManager.checkSessionAndRedirect(context, _userProvider.errorMessage);
+          }
+        }
       } catch (e) {
         if (mounted) {
           debugPrint('Error al cargar usuarios: $e');
@@ -78,6 +106,9 @@ class _UserListScreenState extends State<UserListScreen> {
               backgroundColor: Colors.red,
             ),
           );
+
+          // Verificar si debemos redirigir al login por el error
+          await SessionManager.checkSessionAndRedirect(context, e.toString());
         }
       } finally {
         if (mounted) {
@@ -92,6 +123,13 @@ class _UserListScreenState extends State<UserListScreen> {
   Future<void> _searchUsers() async {
     if (_centerId != null) {
       await _userProvider.searchUsers(_centerId!, _searchQuery);
+
+      // Verificar si hay error después de buscar los usuarios
+      if (_userProvider.errorMessage.isNotEmpty) {
+        if (mounted) {
+          await SessionManager.checkSessionAndRedirect(context, _userProvider.errorMessage);
+        }
+      }
     }
   }
 
@@ -106,32 +144,9 @@ class _UserListScreenState extends State<UserListScreen> {
             backgroundColor: Colors.green,
           ),
         );
-      }
-    }
-  }
-
-  Future<void> _checkSessionAndRedirect() async {
-    // Si hay un error de sesión, redirigimos al login
-    if (_userProvider.errorMessage.contains("sesión ha expirado") ||
-        _userProvider.errorMessage.contains("No autorizado")) {
-
-      // Limpiar los datos de la sesión
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.logout();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Su sesión ha expirado. Iniciando sesión nuevamente...'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-
-        // Navegar a la pantalla de login
-        Navigator.of(context).pushNamedAndRemoveUntil(
-            '/login',
-                (route) => false
-        );
+      } else if (mounted) {
+        // Verificar si hubo un error de autenticación
+        await SessionManager.checkSessionAndRedirect(context, _userProvider.errorMessage);
       }
     }
   }
@@ -144,10 +159,11 @@ class _UserListScreenState extends State<UserListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Verificar si hay error de sesión
-    if (_userProvider.errorMessage.contains("sesión ha expirado") ||
-        _userProvider.errorMessage.contains("No autorizado")) {
-      _checkSessionAndRedirect();
+    // Verificar si hay error de sesión y redirigir
+    if (_userProvider.errorMessage.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        SessionManager.checkSessionAndRedirect(context, _userProvider.errorMessage);
+      });
     }
 
     return Scaffold(
@@ -510,18 +526,48 @@ class _UserListScreenState extends State<UserListScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _loadUsers,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Reintentar'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: _loadUsers,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 16),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  // Redirigir al login
+                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                  await authProvider.logout();
+
+                  if (mounted) {
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+                        '/login',
+                            (route) => false
+                    );
+                  }
+                },
+                icon: const Icon(Icons.login),
+                label: const Text('Ir a Login'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

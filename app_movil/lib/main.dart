@@ -25,7 +25,7 @@ void main() async {
 
   // Initialize configuration
   await AppConfig.initializeConfig();
-  debugPrint('API URL configured: ${AppConfig.getApiUrl()}');
+  debugPrint('API URL configurada: ${AppConfig.getApiUrl()}');
 
   runApp(
     MultiProvider(
@@ -86,6 +86,14 @@ class MyApp extends StatelessWidget {
 
           // Show home screen if authenticated, login screen otherwise
           if (auth.isAuthenticated) {
+            // Verificar si hay errores de autenticación
+            if (auth.errorMessage.isNotEmpty &&
+                (auth.errorMessage.contains("sesión") ||
+                    auth.errorMessage.contains("401") ||
+                    auth.errorMessage.contains("No autorizado"))) {
+              // Si hay error de autenticación, mostrar login con mensaje
+              return LoginScreen(redirectMessage: auth.errorMessage);
+            }
             return const HomeScreen();
           }
 
@@ -103,6 +111,22 @@ class MyApp extends StatelessWidget {
         '/inventory': (context) => const InventorySnapshotScreen(),
         '/reports': (context) => const InventoryReportScreen(),
         '/analytics': (context) => const AnalyticsScreen(),
+      },
+      // Usar onGenerateRoute para permitir pasar parámetros al login
+      onGenerateRoute: (settings) {
+        if (settings.name == '/login') {
+          // Verificar si hay argumentos para el mensaje de redirección
+          final args = settings.arguments;
+          if (args != null && args is String) {
+            return MaterialPageRoute(
+              builder: (context) => LoginScreen(redirectMessage: args),
+            );
+          }
+          return MaterialPageRoute(
+            builder: (context) => const LoginScreen(),
+          );
+        }
+        return null;
       },
     );
   }
