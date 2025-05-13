@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../../inventory/screen/inventory_snapshot_screen.dart';
 import '../../../inventory/screen/manual_inventory_screen.dart';
+import '../../../inventory/services/inventory_report_provider.dart';
+import '../../../inventory/services/product_data_provider.dart';
 import '../../../services/auth_services/auth_provider.dart';
 import '../../image_capture_screen.dart';
 import '../../product_managment/product_screen_managment.dart';
@@ -133,6 +135,39 @@ class InventoryTab extends StatelessWidget {
 
   Widget _buildStatisticsSection(BuildContext context) {
     final Color primaryColor = const Color(0xFF2c6bed);
+    final authProvider = Provider.of<AuthProvider>(context);
+    final productProvider = Provider.of<ProductDataProvider>(context);
+    final reportProvider = Provider.of<InventoryReportProvider>(context);
+
+    // Get total products count
+    final totalProducts = productProvider.currentProductCounts.values.fold(0, (sum, count) => sum + count);
+
+    // Get total categories count
+    final totalCategories = productProvider.currentProductCounts.length;
+
+    // Get priority items (with alerts)
+    final priorityProducts = reportProvider.priorityProducts.length;
+
+    // Refresh function
+    void refreshData() async {
+      if (authProvider.centerId != null) {
+        // Show loading indicator or message if needed
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Actualizando datos...'))
+        );
+
+        // Refresh product data
+        await productProvider.loadProductData(authProvider.centerId!);
+
+        // Refresh reports
+        await reportProvider.loadReports(authProvider.centerId!);
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Datos actualizados correctamente'))
+        );
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -164,10 +199,7 @@ class InventoryTab extends StatelessWidget {
               ),
               IconButton(
                 icon: Icon(Icons.refresh, color: primaryColor, size: 20),
-                onPressed: () {
-                  // Aquí iría la lógica para refrescar las estadísticas
-                  // Por ejemplo, podríamos llamar a un método que actualice los providers
-                },
+                onPressed: refreshData,
                 tooltip: 'Actualizar datos',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -176,29 +208,29 @@ class InventoryTab extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Row(
-            children: const [
+            children: [
               Expanded(
                 child: StatCard(
-                  value: '46',
+                  value: totalProducts.toString(),
                   label: 'Productos',
                   icon: Icons.category_rounded,
                   color: Colors.blue,
                 ),
               ),
-              SizedBox(width: 16),
+              const SizedBox(width: 16),
               Expanded(
                 child: StatCard(
-                  value: '12',
-                  label: 'Alertas',
-                  icon: Icons.notifications_active_rounded,
-                  color: Colors.orange,
+                  value: totalCategories.toString(),
+                  label: 'Categorías',
+                  icon: Icons.list_alt_rounded,
+                  color: Colors.green,
                 ),
               ),
-              SizedBox(width: 16),
+              const SizedBox(width: 16),
               Expanded(
                 child: StatCard(
-                  value: '8',
-                  label: 'Faltantes',
+                  value: priorityProducts.toString(),
+                  label: 'Prioritarios',
                   icon: Icons.error_outline_rounded,
                   color: Colors.red,
                 ),
