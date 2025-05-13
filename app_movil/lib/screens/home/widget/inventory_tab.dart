@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../inventory/screen/inventory_snapshot_screen.dart';
-import '../../../inventory/screen/manual_inventory_screen.dart';
+import '../../../inventory/screen/manual_inventory/manual_inventory_screen.dart';
 import '../../../inventory/services/inventory_report_provider.dart';
 import '../../../inventory/services/product_data_provider.dart';
 import '../../../services/auth_services/auth_provider.dart';

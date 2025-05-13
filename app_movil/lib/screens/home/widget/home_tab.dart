@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../inventory/screen/analytics_screen.dart';
 import '../../../inventory/screen/inventory_report_screen.dart';
-import '../../../inventory/screen/manual_inventory_screen.dart';
+import '../../../inventory/screen/manual_inventory/manual_inventory_screen.dart';
 import '../../../services/auth_services/auth_provider.dart';
 import '../../../utils/ui_utils.dart';
 import '../../image_capture_screen.dart';

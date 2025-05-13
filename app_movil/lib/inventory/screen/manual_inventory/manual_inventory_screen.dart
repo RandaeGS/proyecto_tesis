@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../entity/inventory_snapshot.dart';
-import '../services/inventory_comparison_provider.dart';
-import '../services/inventory_report_provider.dart';
-import '../services/inventory_report_sevices.dart';
-import '../services/product_data_provider.dart';
+import '../../entity/inventory_snapshot.dart';
+import '../../services/inventory_comparison_provider.dart';
+import '../../services/inventory_report_provider.dart';
+import '../../services/inventory_report_sevices.dart';
+import '../../services/product_data_provider.dart';
+import 'component/inventory_category_item.dart';
+import 'component/inventory_empty_state.dart';
+import 'component/inventory_filter_bar.dart';
+import 'component/inventory_info_banner.dart';
 
 class ManualInventoryManagementScreen extends StatefulWidget {
   final int centerId;
@@ -28,11 +32,12 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
   final _newCategoryCountController = TextEditingController();
   bool _hasChanges = false;
   bool _isSaving = false;
+  String _searchQuery = '';
+  String _filterCategory = 'Todas';
 
   @override
   void initState() {
     super.initState();
-    // Avoid calling setState during build
     Future.microtask(() => _loadInventoryData());
   }
 
@@ -52,41 +57,25 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
     });
 
     try {
-      debugPrint("Loading inventory data for center: ${widget.centerId}");
-
-      // First try to get data from the product data provider
       final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
-
-      // Reload product data to ensure it's up to date
       await productDataProvider.loadProductData(widget.centerId);
-
-      // Get the current product counts
       _productCounts = Map.from(productDataProvider.currentProductCounts);
-      debugPrint("Loaded product counts from provider: $_productCounts");
 
-      // If counts are empty, try loading from the latest snapshot
       if (_productCounts.isEmpty) {
-        debugPrint("Product counts empty, trying to load from latest snapshot");
-        // Load the latest snapshot
         final snapshotProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
         await snapshotProvider.loadInventorySnapshots(widget.centerId);
 
         if (snapshotProvider.snapshots.isNotEmpty) {
-          _currentSnapshot = snapshotProvider.snapshots.first; // La más reciente
+          _currentSnapshot = snapshotProvider.snapshots.first;
           _productCounts = Map.from(_currentSnapshot!.productCounts);
-          debugPrint("Loaded product counts from snapshot: $_productCounts");
         } else {
-          // Si no hay instantáneas, cargar categorías predeterminadas
-          debugPrint("No snapshots found, using default categories");
           _productCounts = Map.from(InventoryReportService.defaultIdealCounts);
-          _productCounts.forEach((key, value) => _productCounts[key] = 0); // Inicializar con 0
+          _productCounts.forEach((key, value) => _productCounts[key] = 0);
         }
       }
 
-      // Inicializar los controladores para cada categoría
       _initializeControllers();
     } catch (e) {
-      debugPrint("Error loading inventory data: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al cargar datos: $e')),
@@ -102,11 +91,9 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
   }
 
   void _initializeControllers() {
-    // Dispose old controllers first
     _editControllers.forEach((_, controller) => controller.dispose());
     _editControllers = {};
 
-    // Create new controllers for each category
     _productCounts.forEach((category, count) {
       _editControllers[category] = TextEditingController(text: count.toString());
       _editControllers[category]!.addListener(() {
@@ -118,13 +105,10 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
         }
       });
     });
-
-    debugPrint("Initialized ${_editControllers.length} controllers for categories");
   }
 
   Future<void> _saveInventory() async {
     if (!_formKey.currentState!.validate()) {
-      debugPrint("Form validation failed");
       return;
     }
 
@@ -134,28 +118,20 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
     });
 
     try {
-      debugPrint("Saving inventory changes");
-
-      // Collect updated counts from controllers
       Map<String, int> updatedCounts = {};
       _editControllers.forEach((category, controller) {
         updatedCounts[category] = int.tryParse(controller.text) ?? 0;
       });
 
-      debugPrint("Updated counts to save: $updatedCounts");
-
-      // Update the central product data provider
       final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
       productDataProvider.updateProductCounts(updatedCounts);
 
-      // Create a new snapshot with the updated values
       final snapshotProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
       snapshotProvider.setProductDataProvider(productDataProvider);
 
       final snapshotName = 'Actualizacion Manual - ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
       final snapshotDesc = 'Actualizacion manual del inventario';
 
-      debugPrint("Creating new snapshot with name: $snapshotName");
       final success = await snapshotProvider.saveSnapshotFromProductData(
         widget.centerId,
         snapshotName,
@@ -163,8 +139,6 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
       );
 
       if (success) {
-        debugPrint("Snapshot created successfully");
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -178,10 +152,8 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
           _hasChanges = false;
         });
 
-        // Completely reload data to ensure UI is updated
         await _fullReload();
       } else {
-        debugPrint("Failed to create snapshot");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -192,7 +164,6 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
         }
       }
     } catch (e) {
-      debugPrint("Error saving inventory: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error al guardar: $e'),
@@ -207,10 +178,7 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
     }
   }
 
-  // Complete reload of all data
   Future<void> _fullReload() async {
-    debugPrint("Performing full reload of data");
-
     if (!mounted) return;
 
     setState(() {
@@ -218,31 +186,20 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
     });
 
     try {
-      // First reload product data
       final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
       await productDataProvider.loadProductData(widget.centerId);
 
-      // Then reload inventory snapshots
       final inventoryProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
       await inventoryProvider.loadInventorySnapshots(widget.centerId);
 
-      // Then reload reports
       try {
         final reportProvider = Provider.of<InventoryReportProvider>(context, listen: false);
         await reportProvider.loadReports(widget.centerId);
-      } catch (e) {
-        debugPrint('Error refreshing reports: $e');
-      }
+      } catch (e) {}
 
-      // Get the updated counts
       _productCounts = Map.from(productDataProvider.currentProductCounts);
-
-      // Reinitialize controllers
       _initializeControllers();
-
-      debugPrint("Full reload completed, product counts: $_productCounts");
     } catch (e) {
-      debugPrint("Error during full reload: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al recargar datos: $e')),
@@ -285,12 +242,10 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
       _editControllers[categoryName] = TextEditingController(text: count.toString());
       _hasChanges = true;
 
-      // Limpiar los controladores
       _newCategoryController.clear();
       _newCategoryCountController.clear();
     });
 
-    // Cerrar el diálogo
     Navigator.of(context).pop();
   }
 
@@ -363,65 +318,87 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
     );
   }
 
-  void _showSnapshotHistory() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => InventoryHistoryScreen(centerId: widget.centerId),
-      ),
-    );
+  List<MapEntry<String, int>> _getFilteredItems() {
+    var items = _productCounts.entries.toList();
+
+    if (_searchQuery.isNotEmpty) {
+      items = items
+          .where((entry) => entry.key.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .toList();
+    }
+
+    if (_filterCategory != 'Todas') {
+      items = items
+          .where((entry) => _getCategoryType(entry.key) == _filterCategory)
+          .toList();
+    }
+
+    return items;
+  }
+
+  String _getCategoryType(String category) {
+    final lowerCategory = category.toLowerCase();
+
+    if (lowerCategory.contains('bebida')) return 'Bebidas';
+    if (lowerCategory.contains('enlatado')) return 'Alimentos';
+    if (lowerCategory.contains('leche')) return 'Lácteos';
+    if (lowerCategory.contains('galleta')) return 'Snacks';
+    if (lowerCategory.contains('cereal')) return 'Cereales';
+    if (lowerCategory.contains('pasta') || lowerCategory.contains('fideo')) return 'Pastas';
+    if (lowerCategory.contains('condimento')) return 'Condimentos';
+
+    return 'Otros';
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestión Manual de Inventario'),
+        title: const Text('Gestión de Productos'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         actions: [
-          // Botón para ver historial
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: 'Ver historial',
-            onPressed: _showSnapshotHistory,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => InventoryHistoryScreen(centerId: widget.centerId),
+              ),
+            ),
           ),
-          // Botón para sincronizar con detecciones
           IconButton(
             icon: const Icon(Icons.sync),
-            tooltip: 'Sincronizar con detecciones',
+            tooltip: 'Sincronizar',
             onPressed: () async {
-              setState(() {
-                _isLoading = true;
-              });
-
+              setState(() => _isLoading = true);
               try {
                 await _fullReload();
-
-                // Notify user
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Datos sincronizados correctamente con las detecciones'),
+                    content: Text('Datos sincronizados correctamente'),
                     backgroundColor: Colors.green,
                   ),
                 );
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Error al sincronizar datos: $e'),
+                    content: Text('Error al sincronizar: $e'),
                     backgroundColor: Colors.red,
                   ),
                 );
               } finally {
-                setState(() {
-                  _isLoading = false;
-                });
+                setState(() => _isLoading = false);
               }
             },
           ),
-          // Refresh button
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Recargar datos',
+            tooltip: 'Recargar',
             onPressed: _fullReload,
           ),
         ],
@@ -432,165 +409,54 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
         key: _formKey,
         child: Column(
           children: [
-            // Panel informativo
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: Colors.blue.shade50,
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, color: Colors.blue),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Gestión Manual de Inventario',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Consumer<ProductDataProvider>(
-                          builder: (context, provider, child) {
-                            return Text(
-                              'Última actualizacion: ${_formatDateTime(provider.lastUpdated)}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Categorías activas: ${_productCounts.length}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+            Consumer<ProductDataProvider>(
+              builder: (context, provider, child) => InventoryInfoBanner(
+                title: 'Gestión Manual de Inventario',
+                lastUpdate: _formatDateTime(provider.lastUpdated),
+                categoryCount: _productCounts.length.toString(),
               ),
             ),
 
-            // Lista de productos
+            InventoryFilterBar(
+              onSearchChanged: (value) => setState(() => _searchQuery = value),
+              onFilterChanged: (value) => setState(() => _filterCategory = value),
+              filterOptions: const ['Todas', 'Bebidas', 'Alimentos', 'Lácteos', 'Snacks', 'Cereales', 'Pastas', 'Condimentos', 'Otros'],
+            ),
+
             Expanded(
-              child: ListView.builder(
+              child: _getFilteredItems().isEmpty
+                  ? const InventoryEmptyState(
+                message: 'No se encontraron productos con los filtros actuales',
+              )
+                  : ListView.builder(
                 padding: const EdgeInsets.all(16),
-                itemCount: _productCounts.length,
+                itemCount: _getFilteredItems().length,
                 itemBuilder: (context, index) {
-                  final category = _productCounts.keys.elementAt(index);
+                  final entry = _getFilteredItems()[index];
+                  final category = entry.key;
                   final controller = _editControllers[category]!;
 
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          // Ícono
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade100,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              _getCategoryIcon(category),
-                              color: Colors.blue,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-
-                          // Nombre de categoría
-                          Expanded(
-                            child: Text(
-                              category,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-
-                          // Control de cantidad
-                          SizedBox(
-                            width: 140,
-                            child: Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline),
-                                  onPressed: () {
-                                    int currentValue = int.tryParse(controller.text) ?? 0;
-                                    if (currentValue > 0) {
-                                      controller.text = (currentValue - 1).toString();
-                                      setState(() {
-                                        _hasChanges = true;
-                                      });
-                                    }
-                                  },
-                                ),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: controller,
-                                    textAlign: TextAlign.center,
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      isDense: true,
-                                      contentPadding: EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 8,
-                                      ),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    validator: (value) {
-                                      if (value == null || value.isEmpty) {
-                                        return 'Requerido';
-                                      }
-                                      if (int.tryParse(value) == null) {
-                                        return 'Número inválido';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle_outline),
-                                  onPressed: () {
-                                    int currentValue = int.tryParse(controller.text) ?? 0;
-                                    controller.text = (currentValue + 1).toString();
-                                    setState(() {
-                                      _hasChanges = true;
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Botón de eliminar
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, color: Colors.red),
-                            onPressed: () => _showDeleteConfirmation(category),
-                          ),
-                        ],
-                      ),
-                    ),
+                  return InventoryCategoryItem(
+                    category: category,
+                    controller: controller,
+                    onDecrease: () {
+                      int currentValue = int.tryParse(controller.text) ?? 0;
+                      if (currentValue > 0) {
+                        controller.text = (currentValue - 1).toString();
+                        setState(() => _hasChanges = true);
+                      }
+                    },
+                    onIncrease: () {
+                      int currentValue = int.tryParse(controller.text) ?? 0;
+                      controller.text = (currentValue + 1).toString();
+                      setState(() => _hasChanges = true);
+                    },
+                    onDelete: () => _showDeleteConfirmation(category),
                   );
                 },
               ),
             ),
 
-            // Botones de acción
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -641,28 +507,8 @@ class _ManualInventoryManagementScreenState extends State<ManualInventoryManagem
       ),
     );
   }
-
-  IconData _getCategoryIcon(String category) {
-    final lowerCategory = category.toLowerCase();
-
-    if (lowerCategory.contains('bebida')) return Icons.local_drink;
-    if (lowerCategory.contains('enlatado')) return Icons.lunch_dining;
-    if (lowerCategory.contains('leche')) return Icons.coffee;
-    if (lowerCategory.contains('galleta')) return Icons.cookie;
-    if (lowerCategory.contains('cereal')) return Icons.breakfast_dining;
-    if (lowerCategory.contains('pasta') || lowerCategory.contains('fideo')) return Icons.ramen_dining;
-    if (lowerCategory.contains('condimento')) return Icons.kitchen;
-
-    return Icons.inventory_2;
-  }
-
-  // Format DateTime to a readable string
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
-  }
 }
 
-// Esta pantalla muestra el historial de instantáneas de inventario
 class InventoryHistoryScreen extends StatefulWidget {
   final int centerId;
 
@@ -685,20 +531,14 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      // Load the snapshots when the screen opens
       final provider = Provider.of<InventoryComparisonProvider>(context, listen: false);
       await provider.loadInventorySnapshots(widget.centerId);
     } catch (e) {
-      debugPrint("Error loading snapshot history: $e");
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
@@ -726,7 +566,38 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
           }
 
           if (provider.snapshots.isEmpty) {
-            return const Center(child: Text('No hay registros de inventario'));
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.history_outlined,
+                      size: 72,
+                      color: Colors.grey,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'No hay registros de inventario',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Guarda cambios en el inventario para crear una nueva instantánea',
+                      style: TextStyle(
+                        color: Colors.grey,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            );
           }
 
           return ListView.builder(
@@ -734,8 +605,6 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
             itemCount: provider.snapshots.length,
             itemBuilder: (context, index) {
               final snapshot = provider.snapshots[index];
-
-              // Contar productos y categorías
               final totalProducts = snapshot.productCounts.values
                   .fold(0, (sum, count) => sum + count);
               final totalCategories = snapshot.productCounts.length;
@@ -746,10 +615,7 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: InkWell(
-                  onTap: () {
-                    // Mostrar diálogo con detalles
-                    _showSnapshotDetailsDialog(context, snapshot);
-                  },
+                  onTap: () => _showSnapshotDetailsDialog(context, snapshot),
                   borderRadius: BorderRadius.circular(12),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -758,26 +624,40 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.calendar_today, size: 20),
-                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.inventory_2_outlined,
+                                color: Colors.blue,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
                             Expanded(
-                              child: Text(
-                                snapshot.name,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    snapshot.name,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Fecha: ${snapshot.getFormattedDate()}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Fecha: ${snapshot.getFormattedDate()}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
                         ),
                         const Divider(height: 24),
                         Row(
