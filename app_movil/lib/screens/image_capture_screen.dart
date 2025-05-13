@@ -9,11 +9,13 @@ import '../entities/analisysresult.dart';
 import '../inventory/services/inventory_comparison_provider.dart';
 import '../inventory/services/inventory_sync_service.dart';
 import '../inventory/services/product_data_provider.dart';
+import 'reconciliation/services/inventory_reconciliation_service.dart';
 import '../services/auth_services/auth_provider.dart';
 import '../services/deteccion_services/analysis_provider.dart';
 import '../services/deteccion_services/confirmation_dialog.dart';
 import '../services/images/images_provider.dart';
 import '../services/images/images_service.dart';
+import '../utils/reconciliation_dialog.dart';
 import '../utils/show_analisys_results.dart';
 import 'images/server_screen_managment.dart';
 import 'live_camera/live_camera_screen.dart';
@@ -100,6 +102,10 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
       // Cargar imágenes del centro
       await Provider.of<ServerImageProvider>(context, listen: false)
           .loadCenterImages(_centerId!);
+
+      // También cargar datos de productos para tener el inventario actualizado
+      await Provider.of<ProductDataProvider>(context, listen: false)
+          .loadProductData(_centerId!);
     } catch (e) {
       setState(() => _errorMessage = e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
@@ -119,7 +125,6 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     AnalysisResultsDialog.show(context, result);
   }
 
-  // Captura una nueva imagen
   // Captura una nueva imagen
   Future<void> _captureImage(ImageSource source) async {
     if (_centerId == null) {
@@ -190,12 +195,15 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             await analysisProvider.confirmAnalysis(centerId: _centerId);
 
             // Recargar imágenes del centro
-            await Provider.of<ServerImageProvider>(context, listen: false)
-                .loadCenterImages(_centerId!);
+            final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
+            await imageProvider.loadCenterImages(_centerId!);
 
             // NUEVO: Actualizar el product data provider con los resultados confirmados
-            await Provider.of<ProductDataProvider>(context, listen: false)
-                .loadProductData(_centerId!);
+            final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
+            await productDataProvider.loadProductData(_centerId!);
+
+            // NUEVO: Verificar si hay conflictos con el inventario manual
+            await _checkInventoryReconciliation();
 
             // Cerrar diálogo de progreso
             if (mounted) {
@@ -242,6 +250,80 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     }
   }
 
+  // NUEVO MÉTODO: Comprobar si hay conflictos con el inventario manual
+  Future<void> _checkInventoryReconciliation() async {
+    if (_centerId == null) return;
+
+    try {
+      final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
+      final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
+      final inventoryProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
+
+      // Crear el servicio de reconciliación
+      final reconciliationService = InventoryReconciliationService(
+        imageProvider: imageProvider,
+        productDataProvider: productDataProvider,
+        inventoryProvider: inventoryProvider,
+      );
+
+      // Buscar conflictos
+      final conflicts = await reconciliationService.identifyConflicts();
+
+      if (conflicts.isEmpty) {
+        debugPrint('No se encontraron conflictos de inventario');
+        return;
+      }
+
+      debugPrint('Se encontraron ${conflicts.length} conflictos de inventario');
+
+      // Mostrar diálogo de reconciliación
+      if (mounted) {
+        await ReconciliationDialog.show(
+          context,
+          conflicts,
+          _centerId!,
+              (decisions) async {
+            // Aplicar las decisiones de reconciliación
+            final success = await reconciliationService.reconcileInventory(
+              context,
+              _centerId!,
+              decisions,
+            );
+
+            if (success && mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Inventario reconciliado correctamente'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+
+              // Recargar datos después de la reconciliación
+              await _initialize();
+            }
+
+            // Registrar las decisiones para auditoría
+            for (var decision in decisions) {
+              await reconciliationService.logReconciliationDecision(
+                _centerId!,
+                decision,
+              );
+            }
+          },
+        );
+      }
+    } catch (e) {
+      debugPrint('Error en el proceso de reconciliación: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al reconciliar inventario: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   // NUEVO MÉTODO: Abre la pantalla de detección en vivo
   void _openLiveDetection() {
@@ -263,6 +345,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     ).then((_) {
       // Recargar imágenes al volver
       _initialize();
+
+      // También verificar si hay conflictos con el inventario después de la detección en vivo
+      _checkInventoryReconciliation();
     });
   }
 
@@ -431,6 +516,12 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: _isLoading ? null : _initialize,
             tooltip: 'Recargar imágenes',
+          ),
+          // Botón para forzar verificación de reconciliación
+          IconButton(
+            icon: const Icon(Icons.sync),
+            onPressed: _isLoading ? null : _checkInventoryReconciliation,
+            tooltip: 'Verificar reconciliación',
           ),
         ],
       ),
