@@ -1,4 +1,3 @@
-/// Model to represent a snapshot of inventory at a specific point in time
 class InventorySnapshot {
   final String id;
   final String name;
@@ -6,7 +5,7 @@ class InventorySnapshot {
   final int centerId;
   final String createdAt;
   final Map<String, int> productCounts;
-  final List<String> sourceResultIds; // IDs of the analysis results that generated this snapshot
+  final List<String> sourceResultIds;
 
   InventorySnapshot({
     required this.id,
@@ -18,19 +17,15 @@ class InventorySnapshot {
     required this.sourceResultIds,
   });
 
-  /// Creates an instance from a JSON map
   factory InventorySnapshot.fromJson(Map<String, dynamic> json) {
-    // Convert product counts to format Map<String, int>
     final Map<String, int> counts = {};
 
-    // First check if product_counts exist in the JSON
     if (json['product_counts'] != null && json['product_counts'] is Map) {
       final Map<String, dynamic> countsMap = Map<String, dynamic>.from(json['product_counts']);
       countsMap.forEach((key, value) {
         counts[key] = (value is int) ? value : int.tryParse(value.toString()) ?? 0;
       });
     }
-    // If not, check if items exist (this is the format returned by the API)
     else if (json['items'] != null && json['items'] is List) {
       final List<dynamic> items = json['items'];
       for (var item in items) {
@@ -47,13 +42,11 @@ class InventorySnapshot {
       }
     }
 
-    // Convert the list of source result IDs
     List<String> resultIds = [];
     if (json['source_detections'] != null) {
       resultIds = List<String>.from(json['source_detections']);
     }
 
-    // Debugging
     print('Creating snapshot from JSON: ${json["name"]}, Products: $counts');
 
     return InventorySnapshot(
@@ -69,7 +62,6 @@ class InventorySnapshot {
     );
   }
 
-  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -82,7 +74,6 @@ class InventorySnapshot {
     };
   }
 
-  /// Creates a copy of this snapshot with the specified fields updated
   InventorySnapshot copyWith({
     String? id,
     String? name,
@@ -103,7 +94,6 @@ class InventorySnapshot {
     );
   }
 
-  /// Formats the creation date for display
   String getFormattedDate() {
     try {
       final date = DateTime.parse(createdAt);

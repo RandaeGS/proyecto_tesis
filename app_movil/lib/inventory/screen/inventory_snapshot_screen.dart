@@ -36,23 +36,19 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     setState(() {
       _centerId = authProvider.centerId;
-      _isLoading = true; // Set loading state
+      _isLoading = true;
     });
 
     if (_centerId != null) {
       try {
-        // Initialize the product data provider first
         final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
         await productDataProvider.loadProductData(_centerId!);
 
-        // Link the product data provider to the inventory comparison provider
         final inventoryProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
         inventoryProvider.setProductDataProvider(productDataProvider);
 
-        // Load existing snapshots
         await inventoryProvider.loadInventorySnapshots(_centerId!);
 
-        // Sync data with image provider
         final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
         await imageProvider.loadCenterImages(_centerId!);
         await productDataProvider.syncWithImageProvider(imageProvider, _centerId!);
@@ -61,18 +57,17 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
       } finally {
         if (mounted) {
           setState(() {
-            _isLoading = false; // Set loading state to false
+            _isLoading = false;
           });
         }
       }
     } else {
       setState(() {
-        _isLoading = false; // Set loading state to false
+        _isLoading = false;
       });
     }
   }
 
-// Update the _createSnapshot method to ensure consistent data
   Future<void> _createSnapshot() async {
     if (_centerId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -81,7 +76,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
       return;
     }
 
-    // Mostrar diálogo para ingresar nombre y descripción
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => _buildSnapshotDialog(),
@@ -92,17 +86,13 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Use the product data provider to create the snapshot
       final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
 
-      // First make sure we have the latest data
       await productDataProvider.loadProductData(_centerId!);
 
-      // Update from image detections
       final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
       await productDataProvider.syncWithImageProvider(imageProvider, _centerId!);
 
-      // Create the snapshot directly using the ProductDataProvider
       final success = await productDataProvider.createInventorySnapshot(
         _centerId!,
         _snapshotNameController.text,
@@ -121,7 +111,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
           ),
         );
 
-        // Reload the snapshots
         if (success) {
           final inventoryProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
           await inventoryProvider.loadInventorySnapshots(_centerId!);
@@ -360,11 +349,9 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
           );
         }
 
-        // Mostrar lista de instantáneas
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Información del inventario actual
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Card(
@@ -398,7 +385,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
                       ),
                       const SizedBox(height: 8),
 
-                      // Mostrar un resumen del inventario actual desde el ProductDataProvider
                       Text(
                         'Categorías: ${productDataProvider.currentProductCounts.length}',
                         style: const TextStyle(fontSize: 14),
@@ -433,7 +419,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
               ),
             ),
 
-            // Cabecera con información
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Card(
@@ -506,7 +491,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
               ),
             ),
 
-            // Lista de instantáneas
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.all(16),
@@ -514,7 +498,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
                 itemBuilder: (context, index) {
                   final snapshot = provider.snapshots[index];
 
-                  // Contar categorías y productos
                   final totalProducts = snapshot.productCounts.values
                       .fold(0, (sum, count) => sum + count);
                   final totalCategories = snapshot.productCounts.keys.length;
@@ -530,7 +513,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Cabecera con título e iconos
                           Row(
                             children: [
                               Expanded(
@@ -559,7 +541,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
                             ),
                           ),
 
-                          // Descripción si existe
                           if (snapshot.description.isNotEmpty) ...[
                             const SizedBox(height: 8),
                             Text(
@@ -572,7 +553,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
 
                           const SizedBox(height: 16),
 
-                          // Estadísticas
                           Row(
                             children: [
                               Expanded(
@@ -594,7 +574,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
 
                           const SizedBox(height: 16),
 
-                          // Botón para ver detalles
                           OutlinedButton.icon(
                             onPressed: () => _showSnapshotDetails(snapshot),
                             icon: const Icon(Icons.visibility_outlined),
@@ -693,7 +672,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Encabezado
               Center(
                 child: Container(
                   width: 40,
@@ -738,7 +716,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
               ),
               const SizedBox(height: 8),
 
-              // Lista de productos
               Expanded(
                 child: ListView.builder(
                   controller: scrollController,
@@ -774,7 +751,6 @@ class _InventorySnapshotScreenState extends State<InventorySnapshotScreen> {
     );
   }
 
-  // Format DateTime to a readable string
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }

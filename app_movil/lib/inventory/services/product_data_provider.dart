@@ -27,12 +27,10 @@ class ProductDataProvider with ChangeNotifier {
   String get errorMessage => _errorMessage;
   DateTime get lastUpdated => _lastUpdated;
 
-  /// Sets the authentication token to use for API requests
   void setAuthToken(String token) {
     _authToken = token;
   }
 
-  /// Loads all product data for a specific center
   Future<void> loadProductData(int centerId) async {
     if (_authToken == null) {
       _errorMessage = 'Auth token not set';
@@ -41,18 +39,14 @@ class ProductDataProvider with ChangeNotifier {
     }
 
     _isLoading = true;
-    // Don't call notifyListeners() yet to avoid errors during build
 
     try {
       debugPrint("Loading product data for center $centerId");
 
-      // Step 1: Load latest detections
       await _loadLatestDetections(centerId);
 
-      // Step 2: Load the latest inventory snapshot
       final latestSnapshot = await _loadLatestSnapshot(centerId);
 
-      // Step 3: Merge data from detections and snapshot
       _mergeProductData(latestSnapshot);
 
       _lastUpdated = DateTime.now();
@@ -62,12 +56,10 @@ class ProductDataProvider with ChangeNotifier {
       debugPrint(_errorMessage);
     } finally {
       _isLoading = false;
-      // Now it's safe to notify
       notifyListeners();
     }
   }
 
-  /// Loads the latest confirmed detections from the server
   Future<void> _loadLatestDetections(int centerId) async {
     try {
       final url = Uri.parse('$_baseUrl/api/detecciones/by-center/?center_id=$centerId');
@@ -85,7 +77,6 @@ class ProductDataProvider with ChangeNotifier {
       if (response.statusCode == 200) {
         final List<dynamic> detections = json.decode(response.body);
 
-        // Filter only confirmed detections
         _recentDetections = detections
             .where((detection) => detection['confirmed'] == true)
             .map((detection) => AnalysisResult.fromJson(detection))
@@ -100,7 +91,6 @@ class ProductDataProvider with ChangeNotifier {
     }
   }
 
-  /// Loads the latest inventory snapshot from the server
   Future<InventorySnapshot?> _loadLatestSnapshot(int centerId) async {
     try {
       final url = Uri.parse('$_baseUrl/inventory/api/snapshots/by_center/?center_id=$centerId');
@@ -119,7 +109,6 @@ class ProductDataProvider with ChangeNotifier {
         final List<dynamic> snapshots = json.decode(response.body);
 
         if (snapshots.isNotEmpty) {
-          // Sort by creation date (most recent first)
           snapshots.sort((a, b) =>
               DateTime.parse(b['created_at']).compareTo(DateTime.parse(a['created_at']))
           );
@@ -127,7 +116,6 @@ class ProductDataProvider with ChangeNotifier {
           final latestSnapshot = InventorySnapshot.fromJson(snapshots.first);
           debugPrint('Loaded latest snapshot: ${latestSnapshot.name}');
 
-          // Debug: print the product counts in the snapshot
           debugPrint('Snapshot product counts: ${latestSnapshot.productCounts}');
 
           return latestSnapshot;
@@ -144,12 +132,9 @@ class ProductDataProvider with ChangeNotifier {
     return null;
   }
 
-  /// Merges product data from detections and snapshot
   void _mergeProductData(InventorySnapshot? snapshot) {
-    // Start with a clean slate
     _currentProductCounts = {};
 
-    // First, add data from the latest snapshot if available
     if (snapshot != null) {
       if (snapshot.productCounts.isNotEmpty) {
         snapshot.productCounts.forEach((category, count) {
@@ -165,8 +150,7 @@ class ProductDataProvider with ChangeNotifier {
       debugPrint('No snapshot data available');
     }
 
-    // Then, add data from recent detections
-    // Count items by class in the detection results
+
     Map<String, int> detectionCounts = {};
 
     for (var detection in _recentDetections) {
@@ -180,13 +164,10 @@ class ProductDataProvider with ChangeNotifier {
 
     debugPrint('Detection counts: $detectionCounts');
 
-    // Update counts in the current products
     detectionCounts.forEach((category, count) {
-      // If we already have this category from a snapshot, we should keep the max value
       if (_currentProductCounts.containsKey(category)) {
         _currentProductCounts[category] = Math.max(_currentProductCounts[category]!, count);
       } else {
-        // Otherwise add the new category
         _currentProductCounts[category] = count;
       }
     });
@@ -195,19 +176,15 @@ class ProductDataProvider with ChangeNotifier {
     debugPrint('Product data: $_currentProductCounts');
   }
 
-  /// Updates the product counts directly and explicitly sends update notification
   void updateProductCounts(Map<String, int> newCounts) {
-    // Make a deep copy to ensure we have a new reference
     _currentProductCounts = Map<String, int>.from(newCounts);
     _lastUpdated = DateTime.now();
 
     debugPrint('Product counts updated: $_currentProductCounts');
 
-    // Trigger update explicitly
     notifyListeners();
   }
 
-  /// Creates a new inventory snapshot with the current product counts
   Future<bool> createInventorySnapshot(
       int centerId,
       String name,
@@ -226,18 +203,15 @@ class ProductDataProvider with ChangeNotifier {
     try {
       final url = Uri.parse('$_baseUrl/inventory/api/snapshots/');
 
-      // Use sourceDetectionIds if provided, otherwise use IDs from recentDetections
       final detectionIds = sourceDetectionIds ??
           _recentDetections.map((detection) => detection.id).toList();
 
-      // Validate that we have product counts
       if (_currentProductCounts.isEmpty) {
         _errorMessage = 'No hay productos para guardar en la instantánea';
         debugPrint(_errorMessage);
         return false;
       }
 
-      // Prepare data for API
       final data = {
         'name': name,
         'description': description,
@@ -259,7 +233,6 @@ class ProductDataProvider with ChangeNotifier {
 
       if (response.statusCode == 201) {
         debugPrint('Snapshot created successfully: ${response.body}');
-        // Reload data to update everything
         await loadProductData(centerId);
         return true;
       } else {
@@ -277,7 +250,6 @@ class ProductDataProvider with ChangeNotifier {
     }
   }
 
-  /// Synchronizes the product data between providers
   Future<void> syncWithImageProvider(ServerImageProvider imageProvider, int centerId) async {
     try {
       _isLoading = true;
@@ -285,31 +257,24 @@ class ProductDataProvider with ChangeNotifier {
 
       debugPrint('Syncing with image provider');
 
-      // Get product counts from image provider (only confirmed)
       final imageCounts = imageProvider.getProductCounts(onlyConfirmed: true);
 
       debugPrint('Image provider counts: $imageCounts');
 
-      // Create a copy of current counts for updating
       final updatedCounts = Map<String, int>.from(_currentProductCounts);
 
-      // Update our current counts with this data
       imageCounts.forEach((category, count) {
         if (count > 0) {
-          // If we already have this category, take the maximum
           if (updatedCounts.containsKey(category)) {
             updatedCounts[category] = Math.max(updatedCounts[category]!, count);
           } else {
-            // Otherwise add the new category
             updatedCounts[category] = count;
           }
         }
       });
 
-      // Update the product counts
       _currentProductCounts = updatedCounts;
 
-      // Reload recent detections to ensure we have the latest
       await _loadLatestDetections(centerId);
 
       _lastUpdated = DateTime.now();

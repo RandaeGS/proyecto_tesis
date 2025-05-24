@@ -76,7 +76,6 @@ class _InventoryFilterBarState extends State<InventoryFilterBar> {
 
           const SizedBox(height: 4),
 
-          // Filter chips
           SizedBox(
             height: 36,
             child: ListView.builder(

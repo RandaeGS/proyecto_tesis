@@ -5,11 +5,9 @@ import '../../entities/analisysresult.dart';
 import '../entity/inventory_difference.dart';
 import '../entity/inventory_snapshot.dart';
 
-/// Servicio para manejar la comparación de inventarios a lo largo del tiempo
 class InventoryComparisonService {
   static const String inventorySnapshotsKey = 'inventory_snapshots';
 
-  /// Guarda una instantánea del inventario actual
   Future<bool> saveInventorySnapshot(
       int centerId,
       String name,
@@ -18,10 +16,8 @@ class InventoryComparisonService {
       List<AnalysisResult> sourceResults,
       ) async {
     try {
-      // Obtener snapshots existentes
       final snapshots = await getInventorySnapshots(centerId);
 
-      // Crear un nuevo snapshot
       final newSnapshot = InventorySnapshot(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         name: name,
@@ -32,10 +28,8 @@ class InventoryComparisonService {
         sourceResultIds: sourceResults.map((r) => r.id).toList(),
       );
 
-      // Agregar el nuevo snapshot a la lista
       snapshots.add(newSnapshot);
 
-      // Guardar la lista actualizada
       final prefs = await SharedPreferences.getInstance();
       final snapshotsJson = snapshots.map((s) => s.toJson()).toList();
       await prefs.setString(
@@ -50,7 +44,6 @@ class InventoryComparisonService {
     }
   }
 
-  /// Obtiene todas las instantáneas de inventario para un centro
   Future<List<InventorySnapshot>> getInventorySnapshots(int centerId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -70,16 +63,12 @@ class InventoryComparisonService {
     }
   }
 
-  /// Elimina una instantánea de inventario
   Future<bool> deleteInventorySnapshot(int centerId, String snapshotId) async {
     try {
-      // Obtener todos los snapshots
       final snapshots = await getInventorySnapshots(centerId);
 
-      // Remover el snapshot con el ID especificado
       snapshots.removeWhere((snapshot) => snapshot.id == snapshotId);
 
-      // Guardar la lista actualizada
       final prefs = await SharedPreferences.getInstance();
       final snapshotsJson = snapshots.map((s) => s.toJson()).toList();
       await prefs.setString(
@@ -94,14 +83,12 @@ class InventoryComparisonService {
     }
   }
 
-  /// Compara dos instantáneas de inventario y devuelve las diferencias
   Map<String, InventoryDifference> compareInventorySnapshots(
       InventorySnapshot baseSnapshot,
       InventorySnapshot comparisonSnapshot,
       ) {
     final differences = <String, InventoryDifference>{};
 
-    // Combinar todas las categorías de productos de ambos snapshots
     final allCategories = {...baseSnapshot.productCounts.keys, ...comparisonSnapshot.productCounts.keys};
 
     for (final category in allCategories) {

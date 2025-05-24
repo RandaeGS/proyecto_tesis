@@ -1,12 +1,11 @@
-/// Model to represent an inventory report with replenishment recommendations
 class InventoryReport {
   final String id;
   final String name;
   final String createdAt;
   final int centerId;
   final Map<String, ProductReplenishmentInfo> productRecommendations;
-  final bool isEmergency; // Indicates if this is an emergency report
-  final String? sourceSnapshotId; // ID of the snapshot used to generate this report
+  final bool isEmergency;
+  final String? sourceSnapshotId;
 
   InventoryReport({
     required this.id,
@@ -18,7 +17,6 @@ class InventoryReport {
     this.sourceSnapshotId,
   });
 
-  /// Creates an instance from a JSON map
   factory InventoryReport.fromJson(Map<String, dynamic> json) {
     final Map<String, ProductReplenishmentInfo> recommendations = {};
 
@@ -26,7 +24,6 @@ class InventoryReport {
       final List<dynamic> recsList = json['recommendations'];
 
       for (var rec in recsList) {
-        // Use category name as the key
         final categoryName = rec['category_name'] as String;
         recommendations[categoryName] = ProductReplenishmentInfo.fromJson(rec);
       }
@@ -45,7 +42,6 @@ class InventoryReport {
     );
   }
 
-  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
     final List<Map<String, dynamic>> recsList = [];
     productRecommendations.forEach((key, value) {
@@ -63,7 +59,6 @@ class InventoryReport {
     };
   }
 
-  /// Formats the creation date for display
   String getFormattedDate() {
     try {
       final date = DateTime.parse(createdAt);
@@ -73,7 +68,6 @@ class InventoryReport {
     }
   }
 
-  /// Gets priority products (with priority > 3)
   Map<String, ProductReplenishmentInfo> getPriorityProducts() {
     return Map.fromEntries(
         productRecommendations.entries
@@ -81,16 +75,13 @@ class InventoryReport {
     );
   }
 
-  /// Gets recommendations grouped by priority level
   Map<int, List<MapEntry<String, ProductReplenishmentInfo>>> getRecommendationsByPriority() {
     final Map<int, List<MapEntry<String, ProductReplenishmentInfo>>> result = {};
 
-    // Initialize lists for each priority level (1-5)
     for (int i = 1; i <= 5; i++) {
       result[i] = [];
     }
 
-    // Group recommendations by priority level
     productRecommendations.entries.forEach((entry) {
       final priority = entry.value.priority;
       result[priority]!.add(entry);
@@ -100,14 +91,13 @@ class InventoryReport {
   }
 }
 
-/// Information about product replenishment
 class ProductReplenishmentInfo {
   final String category;
   final int currentCount;
   final int idealCount;
-  final int priority; // 1-5 where 5 is the highest priority
+  final int priority;
   final String note;
-  final int? categoryId; // ID of the category in the database
+  final int? categoryId;
 
   ProductReplenishmentInfo({
     required this.category,
@@ -118,7 +108,6 @@ class ProductReplenishmentInfo {
     this.categoryId,
   });
 
-  /// Creates an instance from a JSON map
   factory ProductReplenishmentInfo.fromJson(Map<String, dynamic> json) {
     return ProductReplenishmentInfo(
       category: json['category_name'] ?? '',
@@ -130,7 +119,6 @@ class ProductReplenishmentInfo {
     );
   }
 
-  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
     return {
       'category': categoryId,
@@ -142,16 +130,13 @@ class ProductReplenishmentInfo {
     };
   }
 
-  /// Calculates how many items to replenish
   int get replenishAmount => idealCount > currentCount ? idealCount - currentCount : 0;
 
-  /// Calculates percentage missing
   double get percentageMissing {
     if (idealCount == 0) return 0.0;
     return (replenishAmount / idealCount) * 100;
   }
 
-  /// Creates a copy with updated values
   ProductReplenishmentInfo copyWith({
     String? category,
     int? currentCount,

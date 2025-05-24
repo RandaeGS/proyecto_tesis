@@ -16,8 +16,6 @@ class InventoryReportProvider with ChangeNotifier {
   bool _isLoading = false;
   String _errorMessage = '';
 
-  // Mapa para almacenar las cantidades ideales actuales
-  // Esto nos permitirá comparar con los informes existentes
   Map<String, int> _currentIdealCounts = {};
 
   // Getters
@@ -26,19 +24,16 @@ class InventoryReportProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
 
-  // Getter para obtener productos prioritarios (con prioridad > 3)
   Map<String, ProductReplenishmentInfo> get priorityProducts {
     final latestReport = getLatestReport();
     if (latestReport == null) return {};
     return latestReport.getPriorityProducts();
   }
 
-  /// Sets the authentication token to use for API requests
   void setAuthToken(String token) {
     _authToken = token;
   }
 
-  /// Load analytics reports for a specific center
   Future<void> loadReports(int centerId) async {
     _isLoading = true;
     _errorMessage = '';
@@ -68,10 +63,8 @@ class InventoryReportProvider with ChangeNotifier {
           throw Exception('Error decoding response: $e');
         }
 
-        // Lista temporal para almacenar los reportes procesados
         final List<InventoryReport> tempReports = [];
 
-        // Procesar cada reporte individualmente
         for (var reportJson in reportsJson) {
           try {
             final report = InventoryReport.fromJson(reportJson);
@@ -81,15 +74,12 @@ class InventoryReportProvider with ChangeNotifier {
           }
         }
 
-        // Actualizar la lista principal
         _reports = tempReports;
 
-        // Sort by creation date (most recent first)
         _reports.sort((a, b) =>
             DateTime.parse(b.createdAt).compareTo(DateTime.parse(a.createdAt))
         );
 
-        // Reset selected report
         _selectedReport = null;
       } else {
         _errorMessage = 'Error al cargar informes de inventario: ${response.statusCode}';
@@ -104,7 +94,6 @@ class InventoryReportProvider with ChangeNotifier {
     }
   }
 
-  /// Generate an inventory report
   Future<InventoryReport?> generateReport(
       InventorySnapshot snapshot, {
         bool isEmergency = false,
@@ -115,10 +104,8 @@ class InventoryReportProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Almacenar las cantidades ideales para uso futuro
       _currentIdealCounts = Map.from(customIdealCounts);
 
-      // Prepare data for API
       final data = {
         'snapshot_id': snapshot.id,
         'is_emergency': isEmergency,
@@ -143,8 +130,7 @@ class InventoryReportProvider with ChangeNotifier {
         Map<String, dynamic> reportJson = json.decode(response.body);
         final report = InventoryReport.fromJson(reportJson);
 
-        // Add to local reports list
-        _reports.insert(0, report); // Add at the beginning
+        _reports.insert(0, report);
         _selectedReport = report;
 
         notifyListeners();
@@ -165,7 +151,6 @@ class InventoryReportProvider with ChangeNotifier {
     }
   }
 
-  /// Delete an inventory report
   Future<bool> deleteReport(int centerId, String reportId) async {
     _isLoading = true;
     _errorMessage = '';
@@ -183,10 +168,8 @@ class InventoryReportProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 204) {
-        // Update local list
         _reports.removeWhere((report) => report.id == reportId);
 
-        // If the deleted report was the selected one, clear selection
         if (_selectedReport?.id == reportId) {
           _selectedReport = null;
         }
@@ -208,59 +191,47 @@ class InventoryReportProvider with ChangeNotifier {
     }
   }
 
-  /// Select a specific report
   void selectReport(InventoryReport report) {
     _selectedReport = report;
     notifyListeners();
   }
 
-  /// Clear the current selection
   void clearSelection() {
     _selectedReport = null;
     notifyListeners();
   }
 
-  /// Get the latest report
   InventoryReport? getLatestReport() {
     if (_reports.isEmpty) return null;
     return _reports.first; // Already sorted by date
   }
 
-  /// Update ideal counts in all reports
-  /// Esta función actualiza las cantidades ideales en todos los informes
+
   void updateIdealCountsInReports(Map<String, int> newIdealCounts) {
-    // Guarda los nuevos valores ideales
     _currentIdealCounts = Map.from(newIdealCounts);
 
     debugPrint('Actualizando cantidades ideales en informes: $newIdealCounts');
 
-    // Actualiza cada informe
     for (var i = 0; i < _reports.length; i++) {
       final report = _reports[i];
 
-      // Crea un nuevo mapa para las recomendaciones actualizadas
       final updatedRecommendations = <String, ProductReplenishmentInfo>{};
 
-      // Actualiza cada recomendación de producto
       report.productRecommendations.forEach((category, info) {
-        // Si hay un nuevo valor ideal para esta categoría
         if (newIdealCounts.containsKey(category)) {
-          // Crea una nueva recomendación con el valor ideal actualizado
           updatedRecommendations[category] = ProductReplenishmentInfo(
             category: category,
-            currentCount: info.currentCount, // Mantener el conteo actual
-            idealCount: newIdealCounts[category]!, // Actualizar el conteo ideal
-            priority: _calculateNewPriority(info.currentCount, newIdealCounts[category]!), // Recalcular prioridad
+            currentCount: info.currentCount,
+            idealCount: newIdealCounts[category]!,
+            priority: _calculateNewPriority(info.currentCount, newIdealCounts[category]!),
             note: info.note,
             categoryId: info.categoryId,
           );
         } else {
-          // Mantener la recomendación original si no hay un nuevo valor ideal
           updatedRecommendations[category] = info;
         }
       });
 
-      // Crea un nuevo informe con las recomendaciones actualizadas
       _reports[i] = InventoryReport(
         id: report.id,
         name: report.name,
@@ -271,31 +242,26 @@ class InventoryReportProvider with ChangeNotifier {
         sourceSnapshotId: report.sourceSnapshotId,
       );
 
-      // Actualiza el informe seleccionado si es necesario
       if (_selectedReport?.id == report.id) {
         _selectedReport = _reports[i];
       }
     }
 
-    // Notifica a los oyentes sobre los cambios
     notifyListeners();
 
     debugPrint('Informes actualizados con nuevas cantidades ideales');
   }
 
-  /// Calcular nueva prioridad basada en la diferencia entre actual e ideal
   int _calculateNewPriority(int currentCount, int idealCount) {
-    if (idealCount == 0) return 1; // Evitar división por cero
+    if (idealCount == 0) return 1;
 
-    // Calcular el porcentaje faltante
     final percentageMissing = ((idealCount - currentCount) / idealCount) * 100;
 
-    // Asignar prioridad basada en el porcentaje faltante
     if (percentageMissing <= 10) return 1;
     if (percentageMissing <= 30) return 2;
     if (percentageMissing <= 50) return 3;
     if (percentageMissing <= 75) return 4;
-    return 5; // Más del 75% faltante
+    return 5;
   }
 
 
@@ -305,14 +271,10 @@ class InventoryReportProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Imprimir las categorías y valores ideales actuales para depuración
       debugPrint('Guardando valores ideales: $idealCounts');
 
-      // Antes de guardar, veamos si realmente hay cambios que hacer
       bool hasChanges = false;
 
-      // Primero cargamos los valores ideales actuales del backend para comparar
-      // O alternativamente usa el endpoint with_ideal_counts
       final url = Uri.parse('${AppConfig.getApiUrl()}/inventory/api/categories/with_ideal_counts/');
       final response = await http.get(
         url,
@@ -325,7 +287,6 @@ class InventoryReportProvider with ChangeNotifier {
       if (response.statusCode == 200) {
         final Map<String, dynamic> currentIdealCounts = json.decode(response.body);
 
-        // Comparar los valores actuales con los nuevos
         idealCounts.forEach((category, newCount) {
           final currentCount = currentIdealCounts[category];
           if (currentCount != newCount) {
@@ -339,7 +300,6 @@ class InventoryReportProvider with ChangeNotifier {
         debugPrint('No se detectaron cambios en los valores ideales, continuando de todas formas');
       }
 
-      // Guardamos los valores ideales en las categorías
       final updateUrl = Uri.parse('${AppConfig.getApiUrl()}/inventory/api/categories/update_ideal_counts/');
       final updateResponse = await http.post(
         updateUrl,
@@ -355,14 +315,10 @@ class InventoryReportProvider with ChangeNotifier {
 
       bool success = updateResponse.statusCode == 200 || updateResponse.statusCode == 201;
 
-      // Actualizamos los informes en memoria sin importar el resultado del servidor
       updateIdealCountsInReports(idealCounts);
 
-      // Ahora actualizamos las recomendaciones en el backend
-      // IMPORTANTE: Incluso si no hay cambios detectados, forzamos la actualización para asegurar consistencia
       await _updateRecommendationsInBackendFixed(idealCounts);
 
-      // Guardamos los valores en SharedPreferences para respaldo
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('ideal_counts_$centerId', json.encode(idealCounts));
 
@@ -371,7 +327,6 @@ class InventoryReportProvider with ChangeNotifier {
       _errorMessage = 'Error al guardar configuración: $e';
       debugPrint(_errorMessage);
 
-      // Aún actualizamos localmente como respaldo
       updateIdealCountsInReports(idealCounts);
 
       final prefs = await SharedPreferences.getInstance();
@@ -384,7 +339,6 @@ class InventoryReportProvider with ChangeNotifier {
     }
   }
 
-// Este método actualiza TODAS las recomendaciones sin comparar los valores ideales anteriores
   Future<void> _updateRecommendationsInBackendFixed(Map<String, int> idealCounts) async {
     if (_reports.isEmpty) {
       debugPrint('No hay informes para actualizar en el backend');
@@ -393,23 +347,18 @@ class InventoryReportProvider with ChangeNotifier {
 
     debugPrint('Actualizando recomendaciones en el backend para ${_reports.length} informes');
 
-    // Para cada informe, enviaremos las actualizaciones de recomendaciones forzadas
     for (var report in _reports) {
       try {
         final recommendations = <Map<String, dynamic>>[];
 
-        // Para cada categoría en los valores ideales
         idealCounts.forEach((categoryName, newIdealCount) {
-          // Buscar si esta categoría está en las recomendaciones del informe
           if (report.productRecommendations.containsKey(categoryName)) {
             final info = report.productRecommendations[categoryName]!;
 
-            // Calcular nueva prioridad
             final newPriority = _calculateNewPriority(info.currentCount, newIdealCount);
 
-            // FORZAR LA ACTUALIZACIÓN sin comparar con el valor anterior
             recommendations.add({
-              'category': info.categoryId, // ID de la categoría
+              'category': info.categoryId,
               'ideal_count': newIdealCount,
               'current_count': info.currentCount,
               'priority': newPriority,
@@ -425,12 +374,10 @@ class InventoryReportProvider with ChangeNotifier {
           continue;
         }
 
-        // Construir URL para actualizar las recomendaciones
         final url = Uri.parse('${AppConfig.getApiUrl()}/inventory/api/reports/${report.id}/update_recommendations/');
 
         debugPrint('Enviando ${recommendations.length} actualizaciones para el informe ${report.id}');
 
-        // Realizar la petición PATCH
         final response = await http.patch(
           url,
           headers: {
@@ -456,7 +403,6 @@ class InventoryReportProvider with ChangeNotifier {
   }
 
   Future<Map<String, int>> loadIdealCounts(int centerId) async {
-    // Si ya tenemos valores en memoria, los devolvemos
     if (_currentIdealCounts.isNotEmpty) {
       debugPrint('Devolviendo valores ideales de memoria: $_currentIdealCounts');
       return _currentIdealCounts;
@@ -467,7 +413,6 @@ class InventoryReportProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Primero intentamos cargar desde el endpoint correcto
       final url = Uri.parse('${AppConfig.getApiUrl()}/inventory/api/categories/with_ideal_counts/');
       debugPrint('Intentando cargar valores ideales desde: $url');
 
@@ -482,18 +427,15 @@ class InventoryReportProvider with ChangeNotifier {
       debugPrint('Response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        // Aquí el backend devuelve directamente un objeto {category_name: ideal_count, ...}
         final Map<String, dynamic> data = json.decode(response.body);
         final Map<String, int> idealCounts = {};
 
-        // Convertir valores a enteros
         data.forEach((key, value) {
           idealCounts[key] = value is int ? value : int.tryParse(value.toString()) ?? 0;
         });
 
         debugPrint('Valores ideales cargados desde backend: $idealCounts');
 
-        // Guardar en memoria y en SharedPreferences
         _currentIdealCounts = idealCounts;
 
         final prefs = await SharedPreferences.getInstance();
@@ -503,7 +445,6 @@ class InventoryReportProvider with ChangeNotifier {
       } else if (response.statusCode == 404) {
         debugPrint('ERROR 404: Endpoint no encontrado. Intentando URL alternativa...');
 
-        // Intentar con una URL alternativa (sin "inventory/api")
         final alternativeUrl = Uri.parse('${AppConfig.getApiUrl()}/categories/with_ideal_counts/');
         debugPrint('Intentando URL alternativa: $alternativeUrl');
 
@@ -537,10 +478,8 @@ class InventoryReportProvider with ChangeNotifier {
           debugPrint('Error con URL alternativa: $e');
         }
 
-        // Si llegamos aquí, ambos intentos fallaron
         return _loadFromSharedPreferences(centerId);
       } else {
-        // Cualquier otro error, intentar cargar desde SharedPreferences
         debugPrint('Error al cargar desde backend: ${response.statusCode}');
         return _loadFromSharedPreferences(centerId);
       }
@@ -548,7 +487,6 @@ class InventoryReportProvider with ChangeNotifier {
       _errorMessage = 'Error al cargar configuración: $e';
       debugPrint(_errorMessage);
 
-      // Si falla, cargar desde SharedPreferences
       return _loadFromSharedPreferences(centerId);
     } finally {
       _isLoading = false;
@@ -556,7 +494,6 @@ class InventoryReportProvider with ChangeNotifier {
     }
   }
 
-// Método auxiliar para cargar desde SharedPreferences
   Future<Map<String, int>> _loadFromSharedPreferences(int centerId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -571,7 +508,6 @@ class InventoryReportProvider with ChangeNotifier {
           idealCounts[key] = value is int ? value : int.tryParse(value.toString()) ?? 0;
         });
 
-        // Guardar en memoria
         _currentIdealCounts = idealCounts;
 
         debugPrint('Valores ideales cargados desde SharedPreferences: $idealCounts');

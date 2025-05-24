@@ -25,7 +25,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
 
-    // Select the first category by default
     if (widget.report.categories.isNotEmpty) {
       _selectedCategory = widget.report.categories.first;
     }
@@ -64,7 +63,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
   }
 
   Widget _buildSummaryTab() {
-    // Get report statistics
     final totalCategories = widget.report.categories.length;
     final maxConsumptionCategory = widget.report.getMostConsumedCategory();
     final minConsumptionCategory = widget.report.getLeastConsumedCategory();
@@ -72,11 +70,9 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
     final averageDailyConsumption = widget.report.getAverageDailyConsumption();
     final peakConsumptionDays = widget.report.getPeakConsumptionDays();
 
-    // Get period type as enum for comparison
     final periodTypeEnum = widget.report.getPeriodTypeEnum();
     final color = periodTypeEnum == PeriodType.weekly ? Colors.blue : Colors.green;
 
-    // Get max category and check if it's an increase
     final maxCategory = maxConsumptionCategory.split(' ').first;
     final isMaxIncrease = _isIncrease(maxCategory);
 
@@ -158,7 +154,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                     Icons.compare_arrows,
                   ),
 
-                  // Show appropriate label based on whether it's an increase or consumption
                   _buildInfoRow(
                     isMaxIncrease ? 'Mayor aumento:' : 'Mayor consumo:',
                     maxConsumptionCategory != 'N/A'
@@ -183,7 +178,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           const SizedBox(height: 24),
 
-          // Consumption by category table
           const Text(
             'Movimiento por Categoría',
             style: TextStyle(
@@ -252,7 +246,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   ),
                   const Divider(),
 
-                  // Table rows
                   ...widget.report.categories.map((category) {
                     final consumption = widget.report.totalConsumption[category] ?? 0;
                     final dailyAvg = averageDailyConsumption[category]?.toStringAsFixed(1) ?? '0';
@@ -322,7 +315,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           const SizedBox(height: 24),
 
-          // Recommendations based on analysis
           const Text(
             'Insights y Recomendaciones',
             style: TextStyle(
@@ -365,7 +357,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                     const SizedBox(height: 16),
                   ],
 
-                  // General trend
                   _buildInsightItem(
                     Icons.insights,
                     Colors.blue,
@@ -552,7 +543,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           const SizedBox(height: 24),
 
-          // Bar chart for total movement
           const Text(
             'Movimiento Total por Categoría',
             style: TextStyle(
@@ -565,7 +555,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
 
           const SizedBox(height: 24),
 
-          // Line chart for detailed movement
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -576,7 +565,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              // Switch to show average
               Row(
                 children: [
                   const Text('Mostrar promedio'),
@@ -602,16 +590,13 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
   }
 
   Widget _buildTotalConsumptionChart() {
-    // Get data for the chart
     final categories = widget.report.categories;
     final consumptionData = categories.map((category) {
       return widget.report.totalConsumption[category] ?? 0;
     }).toList();
 
-    // Calculate max Y value (ensure it's at least 5 to avoid a horizontal interval of 0)
     final maxY = consumptionData.isEmpty ? 10 : Math.max(5, (consumptionData.reduce((a, b) => a > b ? a : b) * 1.2).ceil());
 
-    // Calculate horizontal interval (ensure it's not zero)
     final horizontalInterval = Math.max(1.0, maxY / 5);
 
     return SizedBox(
@@ -637,7 +622,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   tooltipBgColor: Colors.blueGrey,
                   getTooltipItem: (group, groupIndex, rod, rodIndex) {
                     final category = categories[groupIndex];
-                    // Determine if it's an increase or consumption
                     final isIncrease = _isIncrease(category);
                     final movementType = isIncrease ? "Aumento" : "Consumo";
 
@@ -713,7 +697,6 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
                   barRods: [
                     BarChartRodData(
                       toY: consumptionData[index].toDouble(),
-                      // Use different color for increases vs. consumption
                       color: _isIncrease(categories[index]) ? Colors.green : Colors.red,
                       width: 20,
                       borderRadius: const BorderRadius.only(
@@ -743,24 +726,19 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
   }
 
   bool _isIncrease(String category) {
-    // Primero verifica en los totales de consumo
     final total = widget.report.totalConsumption[category] ?? 0;
 
-    // Luego verifica en los data points si hay alguno marcado como aumento
     if (widget.report.consumptionData.containsKey(category)) {
       final dataPoints = widget.report.consumptionData[category]!;
       if (dataPoints.isNotEmpty) {
-        // Si hay algún data point marcado como aumento, consideramos que es un aumento
         return dataPoints.any((point) => point.isIncrease());
       }
     }
 
-    // Si no hay data points, asumimos que es consumo (a menos que el total sea positivo)
     return total > 0;
   }
 
   Widget _buildDetailedConsumptionChart() {
-    // Get data for the chart
     final dataPoints = widget.report.consumptionData[_selectedCategory] ?? [];
     final isIncreaseCategory = _isIncrease(_selectedCategory);
 
@@ -775,18 +753,14 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> with SingleTick
       );
     }
 
-    // Sort points by date
     dataPoints.sort((a, b) => a.getDateTime().compareTo(b.getDateTime()));
 
-    // Calculate max Y value (ensure it's at least 5 to avoid a horizontal interval of 0)
     final maxY = dataPoints.isEmpty
         ? 10
         : Math.max(5, (dataPoints.map((p) => p.count).reduce((a, b) => a > b ? a : b) * 1.2).ceil());
 
-    // Calculate horizontal interval (ensure it's not zero)
     final horizontalInterval = Math.max(1.0, maxY / 5);
 
-    // Calculate average daily consumption
     final averageConsumption = dataPoints.isEmpty
         ? 0.0
         : dataPoints.map((p) => p.count).reduce((a, b) => a + b) / dataPoints.length;

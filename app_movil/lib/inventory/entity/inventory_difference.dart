@@ -1,4 +1,3 @@
-/// Model to represent the difference in a product's inventory
 class InventoryDifference {
   final String category;
   final int initialCount;
@@ -14,7 +13,6 @@ class InventoryDifference {
     required this.percentageChange,
   });
 
-  /// Creates an instance from a JSON map
   factory InventoryDifference.fromJson(Map<String, dynamic> json) {
     return InventoryDifference(
       category: json['category'] ?? '',
@@ -25,7 +23,6 @@ class InventoryDifference {
     );
   }
 
-  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
     return {
       'category': category,

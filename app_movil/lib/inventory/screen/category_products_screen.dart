@@ -40,20 +40,15 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Primero esperamos a que el widget esté completamente inicializado
       await Future.delayed(Duration.zero);
 
-      // Después de la inicialización completa, cargamos los informes
       if (mounted) {
-        // Cargar informes para obtener información de productos
         await Provider.of<InventoryReportProvider>(context, listen: false)
             .loadReports(widget.centerId);
 
-        // Cargar imágenes del centro para mostrar ejemplos visuales
         await Provider.of<ServerImageProvider>(context, listen: false)
             .loadCenterImages(widget.centerId);
 
-        // Obtener categorías disponibles
         final reportProvider = Provider.of<InventoryReportProvider>(context, listen: false);
         final latestReport = reportProvider.getLatestReport();
 
@@ -61,11 +56,9 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
           _availableCategories = latestReport.productRecommendations.keys.toList();
           _productInfoByCategory = latestReport.productRecommendations;
         } else {
-          // Si no hay informes, usar categorías predeterminadas
           _availableCategories = InventoryReportService.defaultIdealCounts.keys.toList();
         }
 
-        // Seleccionar categoría inicial
         if (widget.category != null) {
           _selectedCategory = widget.category!;
         } else if (_availableCategories.isNotEmpty) {
@@ -114,7 +107,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
         final category = _availableCategories[index];
         final productInfo = _productInfoByCategory[category];
 
-        // Determinar color según la prioridad
         Color categoryColor = Colors.blue;
         if (productInfo != null) {
           categoryColor = _getPriorityColor(productInfo.priority);
@@ -140,7 +132,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Banner de color superior según prioridad
                 Container(
                   height: 8,
                   decoration: BoxDecoration(
@@ -152,12 +143,10 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                   ),
                 ),
 
-                // Imagen representativa de la categoría
                 Expanded(
                   child: _buildCategoryImage(category),
                 ),
 
-                // Información de la categoría
                 Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Column(
@@ -206,16 +195,13 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
   }
 
   Widget _buildCategoryDetail() {
-    // Obtener información del producto si está disponible
     final productInfo = _productInfoByCategory[_selectedCategory];
 
-    // Obtener color según la prioridad
     Color categoryColor = Colors.blue;
     if (productInfo != null) {
       categoryColor = _getPriorityColor(productInfo.priority);
     }
 
-    // Obtener imágenes relacionadas con esta categoría
     final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
     final categoryImages = _selectedCategory.isNotEmpty
         ? imageProvider.getImagesForCategory(_selectedCategory, onlyConfirmed: true)
@@ -226,7 +212,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Tarjeta de información
           Card(
             elevation: 3,
             shape: RoundedRectangleBorder(
@@ -234,7 +219,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
             ),
             child: Column(
               children: [
-                // Banner de color superior según prioridad
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -272,13 +256,11 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                   ),
                 ),
 
-                // Detalles del producto
                 if (productInfo != null)
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       children: [
-                        // Nivel de existencias
                         Row(
                           children: [
                             const Icon(Icons.inventory_2, size: 20),
@@ -299,7 +281,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
                         ),
                         const SizedBox(height: 16),
 
-                        // Estadísticas
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
@@ -349,7 +330,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
 
                         const SizedBox(height: 16),
 
-                        // Recomendación
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
@@ -385,7 +365,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
 
           const SizedBox(height: 24),
 
-          // Imágenes relacionadas con esta categoría
           if (categoryImages.isNotEmpty) ...[
             Row(
               children: [
@@ -495,7 +474,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
 
           const SizedBox(height: 24),
 
-          // Botón para ver todas las categorías
           if (!widget.showAllCategories)
             Center(
               child: ElevatedButton.icon(
@@ -528,7 +506,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
     final categoryImages = imageProvider.getImagesForCategory(category, onlyConfirmed: true);
 
     if (categoryImages.isEmpty) {
-      // Si no hay imágenes, mostrar un icono
       return Center(
         child: Icon(
           _getCategoryIcon(category),
@@ -538,7 +515,6 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
       );
     }
 
-    // Usar la primera imagen disponible
     return ClipRRect(
       borderRadius: const BorderRadius.only(
         topLeft: Radius.circular(12),
@@ -576,13 +552,11 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
   }
 
   Widget _buildLevelIndicator(int current, int ideal, Color color) {
-    // Calcular el nivel relativo (entre 0 y 1)
     double level = ideal > 0 ? current / ideal : 0;
-    if (level > 1) level = 1; // Limitar a 1 máximo
+    if (level > 1) level = 1;
 
     return Stack(
       children: [
-        // Barra de fondo
         Container(
           height: 8,
           decoration: BoxDecoration(
@@ -590,10 +564,9 @@ class _CategoryProductsScreenState extends State<CategoryProductsScreen> {
             borderRadius: BorderRadius.circular(4),
           ),
         ),
-        // Barra de nivel
         Container(
           height: 8,
-          width: MediaQuery.of(context).size.width * 0.3 * level, // Ajustar ancho según nivel
+          width: MediaQuery.of(context).size.width * 0.3 * level,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(4),

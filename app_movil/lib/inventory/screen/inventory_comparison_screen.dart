@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../entity/inventory_difference.dart';
 import '../services/inventory_comparison_provider.dart';
-import '../services/inventory_comparison_services.dart';
 import '../entity/inventory_snapshot.dart';
 
 class InventoryComparisonScreen extends StatefulWidget {
@@ -24,7 +23,6 @@ class _InventoryComparisonScreenState extends State<InventoryComparisonScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              // Limpiar selecciones y resultados
               Provider.of<InventoryComparisonProvider>(
                 context,
                 listen: false,
@@ -81,7 +79,6 @@ class _InventoryComparisonScreenState extends State<InventoryComparisonScreen> {
 
           return Column(
             children: [
-              // Selección de instantáneas
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -122,7 +119,6 @@ class _InventoryComparisonScreenState extends State<InventoryComparisonScreen> {
                 ),
               ),
 
-              // Resultados de la comparación
               if (provider.baseSnapshot != null &&
                   provider.comparisonSnapshot != null &&
                   provider.comparisonResults.isNotEmpty)
@@ -271,28 +267,23 @@ class _InventoryComparisonScreenState extends State<InventoryComparisonScreen> {
       );
     }
 
-    // Formatear fechas para mostrarlas en la cabecera
     final baseDate = provider.baseSnapshot!.getFormattedDate();
     final comparisonDate = provider.comparisonSnapshot!.getFormattedDate();
 
-    // Organizar las diferencias para mostrarlas
     final differences = provider.comparisonResults.values.toList();
 
-    // Separar aumentos, disminuciones y sin cambios
     final increases = differences.where((d) => d.difference > 0).toList();
     final decreases = differences.where((d) => d.difference < 0).toList();
     final noChanges = differences.where((d) => d.difference == 0).toList();
 
-    // Ordenar por magnitud del cambio (de mayor a menor)
     increases.sort((a, b) => b.difference.compareTo(a.difference));
-    decreases.sort((a, b) => a.difference.compareTo(b.difference)); // Negativo primero
+    decreases.sort((a, b) => a.difference.compareTo(b.difference));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Resumen de la comparación
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -367,7 +358,6 @@ class _InventoryComparisonScreenState extends State<InventoryComparisonScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Estadísticas de cambios
                   Row(
                     children: [
                       _buildChangeStatistic(
@@ -397,7 +387,6 @@ class _InventoryComparisonScreenState extends State<InventoryComparisonScreen> {
 
           const SizedBox(height: 24),
 
-          // Productos con aumento
           if (increases.isNotEmpty) ...[
             _buildChangeSection(
               'Productos con aumento',
@@ -408,7 +397,6 @@ class _InventoryComparisonScreenState extends State<InventoryComparisonScreen> {
             const SizedBox(height: 24),
           ],
 
-          // Productos con disminución
           if (decreases.isNotEmpty) ...[
             _buildChangeSection(
               'Productos con disminución',
@@ -419,7 +407,6 @@ class _InventoryComparisonScreenState extends State<InventoryComparisonScreen> {
             const SizedBox(height: 24),
           ],
 
-          // Productos sin cambios
           if (noChanges.isNotEmpty) ...[
             _buildChangeSection(
               'Productos sin cambios',
@@ -508,7 +495,6 @@ class _InventoryComparisonScreenState extends State<InventoryComparisonScreen> {
   }
 
   Widget _buildDifferenceItem(InventoryDifference difference, Color color) {
-    // Calcular el texto de cambio
     final change = difference.difference.abs();
     final changeText = difference.difference > 0
         ? '+$change'
@@ -516,7 +502,6 @@ class _InventoryComparisonScreenState extends State<InventoryComparisonScreen> {
         ? '-$change'
         : '0';
 
-    // Calcular la barra de progreso
     double progressValue = 0.0;
     if (difference.initialCount > 0 && difference.currentCount > 0) {
       progressValue = difference.currentCount /

@@ -37,33 +37,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
   }
 
   Future<void> _initialize() async {
-    // Primero establecemos el estado inicial
     setState(() {
       _centerId = Provider.of<AuthProvider>(context, listen: false).centerId;
-      _isLoading = false; // Empezamos con loading = false para evitar problemas
+      _isLoading = false;
     });
 
     if (_centerId != null) {
-      // Debemos usar Future.microtask para evitar llamar a Provider durante el build
       Future.microtask(() async {
-        // Intentamos cargar los datos en segundo plano
         try {
-          // Marcar como loading antes de cargar
           setState(() {
             _isLoading = true;
           });
 
-          // Load existing analytics reports
           await Provider.of<AnalyticsProvider>(context, listen: false)
               .loadReports(_centerId!);
 
-          // Load snapshots for selection
           await Provider.of<InventoryComparisonProvider>(context, listen: false)
               .loadInventorySnapshots(_centerId!);
         } catch (e) {
           debugPrint('Error al inicializar: $e');
         } finally {
-          // Marcar como no loading al finalizar
           if (mounted) {
             setState(() {
               _isLoading = false;
@@ -227,7 +220,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
           );
         }
 
-        // Display list of reports
         return ListView.builder(
           padding: const EdgeInsets.all(16),
           itemCount: provider.reports.length,
@@ -241,13 +233,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
   }
 
   Widget _buildReportCard(AnalyticsReport report) {
-    // Determine color based on period type
     final periodType = report.getPeriodTypeEnum();
     final color = periodType == PeriodType.weekly
         ? Colors.blue
         : Colors.green;
 
-    // Get report statistics
     final totalCategories = report.categories.length;
     final maxConsumptionCategory = report.getMostConsumedCategory();
     final totalConsumption = report.totalConsumption.values.fold(0, (sum, value) => sum + value);
@@ -273,7 +263,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with title and icons
               Row(
                 children: [
                   Container(
@@ -317,7 +306,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
                 ],
               ),
 
-              // Date and range
               Text(
                 'Creado: ${report.getFormattedDate()}',
                 style: TextStyle(
@@ -335,7 +323,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
               ),
               const SizedBox(height: 12),
 
-              // Statistics
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -445,7 +432,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
           );
         }
 
-        // Get all available categories by combining categories from all snapshots
         final allCategories = <String>{};
         for (final snapshot in comparisonProvider.snapshots) {
           allCategories.addAll(snapshot.productCounts.keys);
@@ -456,7 +442,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Title and instructions
               const Text(
                 'Nuevo Reporte Analítico',
                 style: TextStyle(
@@ -471,7 +456,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
               ),
               const SizedBox(height: 24),
 
-              // Period type selection
               const Text(
                 'Tipo de Análisis',
                 style: TextStyle(
@@ -511,7 +495,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
               ),
               const SizedBox(height: 24),
 
-              // Snapshot selection
               const Text(
                 'Rango de Fechas',
                 style: TextStyle(
@@ -553,7 +536,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
               ),
               const SizedBox(height: 24),
 
-              // Category selection
               const Text(
                 'Categorías a Analizar',
                 style: TextStyle(
@@ -614,7 +596,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
                 ),
               const SizedBox(height: 24),
 
-              // Report name (optional)
               TextField(
                 decoration: InputDecoration(
                   labelText: 'Nombre del Reporte (opcional)',
@@ -624,12 +605,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
                   ),
                 ),
                 onChanged: (value) {
-                  // Store name to use when generating the report
                 },
               ),
               const SizedBox(height: 24),
 
-              // Button to generate report
               Center(
                 child: ElevatedButton.icon(
                   onPressed: _canGenerateReport()
@@ -825,7 +804,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
       return;
     }
 
-    // Validate that the start date is before the end date
     final startDate = DateTime.parse(_startSnapshot!.createdAt);
     final endDate = DateTime.parse(_endSnapshot!.createdAt);
 
@@ -865,10 +843,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with SingleTickerProv
             ),
           );
 
-          // Navigate to reports tab
           _tabController.animateTo(0);
 
-          // Select the newly created report
           provider.selectReport(report);
         }
       }

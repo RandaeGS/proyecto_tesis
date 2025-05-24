@@ -30,7 +30,6 @@ class InventoryCategoryItem extends StatelessWidget {
           children: [
             Row(
               children: [
-                // Category icon
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -45,7 +44,6 @@ class InventoryCategoryItem extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
 
-                // Category name
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,7 +66,6 @@ class InventoryCategoryItem extends StatelessWidget {
                   ),
                 ),
 
-                // Delete button
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
                   onPressed: onDelete,
@@ -81,7 +78,6 @@ class InventoryCategoryItem extends StatelessWidget {
             const Divider(height: 1),
             const SizedBox(height: 12),
 
-            // Quantity controls
             Row(
               children: [
                 const Text(
@@ -103,7 +99,6 @@ class InventoryCategoryItem extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        // Decrease button
                         IconButton(
                           icon: const Icon(Icons.remove_circle_outline),
                           onPressed: onDecrease,
@@ -113,7 +108,6 @@ class InventoryCategoryItem extends StatelessWidget {
                           tooltip: 'Disminuir',
                         ),
 
-                        // Quantity input
                         Expanded(
                           child: TextFormField(
                             controller: controller,
@@ -139,7 +133,6 @@ class InventoryCategoryItem extends StatelessWidget {
                           ),
                         ),
 
-                        // Increase button
                         IconButton(
                           icon: const Icon(Icons.add_circle_outline),
                           onPressed: onIncrease,

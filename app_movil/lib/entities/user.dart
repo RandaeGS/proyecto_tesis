@@ -1,11 +1,10 @@
-/// Modelo para representar un usuario del sistema
 class User {
   final String email;
-  final String? password; // Opcional, solo para creación
+  final String? password;
   final String name;
   final bool isSuperuser;
   final bool isStaff;
-  final int? centerId; // ID del centro asignado (opcional)
+  final int? centerId;
 
   User({
     required this.email,
@@ -16,9 +15,7 @@ class User {
     this.centerId,
   });
 
-  /// Crea una instancia desde un mapa JSON
   factory User.fromJson(Map<String, dynamic> json) {
-    // Manejar diferentes formatos de centerId
     int? parsedCenterId;
 
     if (json.containsKey('center_id')) {
@@ -38,7 +35,6 @@ class User {
     );
   }
 
-  /// Convierte la instancia a un mapa JSON
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = {
       'email': email,
@@ -47,12 +43,10 @@ class User {
       'is_staff': isStaff,
     };
 
-    // Solo incluir password si está presente
     if (password != null && password!.isNotEmpty) {
       data['password'] = password;
     }
 
-    // Solo incluir centerId si está presente
     if (centerId != null) {
       data['center_id'] = centerId;
     }
@@ -60,7 +54,6 @@ class User {
     return data;
   }
 
-  /// Crea una copia de este usuario con los campos especificados actualizados
   User copyWith({
     String? email,
     String? password,

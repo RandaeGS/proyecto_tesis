@@ -1,20 +1,18 @@
-import 'package:flutter/foundation.dart'; // Para debugPrint
+import 'package:flutter/foundation.dart';
 
-/// Model to represent an analytics report of product consumption
 class AnalyticsReport {
   final String id;
   final String name;
   final String createdAt;
   final int centerId;
-  final List<String> categories; // Categories included in the analysis
-  final DateRange dateRange; // Date range of the analysis
-  final String periodType; // Type of period (weekly, monthly)
-  final Map<String, List<ConsumptionDataPoint>> consumptionData; // Consumption data by category
-  final Map<String, int> totalConsumption; // Total consumption by category in the period
-  final String? startSnapshotId; // ID of the start snapshot
-  final String? endSnapshotId; // ID of the end snapshot
+  final List<String> categories;
+  final DateRange dateRange;
+  final String periodType;
+  final Map<String, List<ConsumptionDataPoint>> consumptionData;
+  final Map<String, int> totalConsumption;
+  final String? startSnapshotId;
+  final String? endSnapshotId;
 
-  /// Converts PeriodType enum to string for storage
   static String _periodTypeToString(PeriodType periodType) {
     switch (periodType) {
       case PeriodType.weekly:
@@ -22,7 +20,7 @@ class AnalyticsReport {
       case PeriodType.monthly:
         return 'monthly';
       default:
-        return 'weekly'; // Default to weekly
+        return 'weekly';
     }
   }
 
@@ -33,14 +31,13 @@ class AnalyticsReport {
     required this.centerId,
     required this.categories,
     required this.dateRange,
-    required PeriodType periodTypeEnum, // Accept enum, not string
+    required PeriodType periodTypeEnum,
     required this.consumptionData,
     required this.totalConsumption,
     this.startSnapshotId,
     this.endSnapshotId,
-  }) : this.periodType = _periodTypeToString(periodTypeEnum); // Convert enum to string in initializer
+  }) : this.periodType = _periodTypeToString(periodTypeEnum);
 
-  /// Alternative constructor directly with periodType as string
   AnalyticsReport.withStringPeriodType({
     required this.id,
     required this.name,
@@ -48,14 +45,13 @@ class AnalyticsReport {
     required this.centerId,
     required this.categories,
     required this.dateRange,
-    required this.periodType, // Direct string
+    required this.periodType,
     required this.consumptionData,
     required this.totalConsumption,
     this.startSnapshotId,
     this.endSnapshotId,
   });
 
-  /// Get the period type as enum
   PeriodType getPeriodTypeEnum() {
     switch (periodType.toLowerCase()) {
       case 'weekly':
@@ -63,36 +59,29 @@ class AnalyticsReport {
       case 'monthly':
         return PeriodType.monthly;
       default:
-        return PeriodType.weekly; // Default
+        return PeriodType.weekly;
     }
   }
 
-  /// Creates an instance from a JSON map
   factory AnalyticsReport.fromJson(Map<String, dynamic> json) {
     try {
       debugPrint('Creating AnalyticsReport from JSON: ${json['name']}');
 
-      // Convert consumption data
       final Map<String, List<ConsumptionDataPoint>> consumption = {};
 
       if (json['data_points'] != null) {
         final List<dynamic> dataPoints = json['data_points'];
         debugPrint('Found ${dataPoints.length} data points');
 
-        // Group data points by category
         final Map<String, List<dynamic>> pointsByCategory = {};
         for (var point in dataPoints) {
           try {
-            // El problema está aquí - necesitamos usar el nombre de la categoría o la referencia correcta
             String categoryName;
 
-            // Primero intentar obtener el category_name directamente
             if (point['category_name'] != null) {
               categoryName = point['category_name'].toString();
             }
-            // Si no está disponible, intenta buscar la categoría por ID
             else if (point['category'] != null) {
-              // Buscamos la categoría correspondiente en consumption_totals
               final categoryId = point['category'];
               final matchingTotal = json['consumption_totals']?.firstWhere(
                       (total) => total['category'] == categoryId,
@@ -102,11 +91,9 @@ class AnalyticsReport {
               if (matchingTotal != null && matchingTotal['category_name'] != null) {
                 categoryName = matchingTotal['category_name'].toString();
               } else {
-                // Si no podemos encontrar el nombre, usamos el ID como string
                 categoryName = 'Categoría ${categoryId.toString()}';
               }
             } else {
-              // Si no hay manera de identificar la categoría, saltamos este punto
               continue;
             }
 
@@ -116,11 +103,9 @@ class AnalyticsReport {
             pointsByCategory[categoryName]!.add(point);
           } catch (e) {
             debugPrint('Error processing data point: $e');
-            // Continue with the next point
           }
         }
 
-        // Convert to ConsumptionDataPoint objects
         pointsByCategory.forEach((category, points) {
           try {
             consumption[category] = points
@@ -129,13 +114,11 @@ class AnalyticsReport {
             debugPrint('Added ${points.length} data points for $category');
           } catch (e) {
             debugPrint('Error converting data points for $category: $e');
-            // If there's an error, use an empty list
             consumption[category] = [];
           }
         });
       }
 
-      // Convert total consumption
       final Map<String, int> total = {};
 
       if (json['consumption_totals'] != null) {
@@ -153,12 +136,10 @@ class AnalyticsReport {
             }
           } catch (e) {
             debugPrint('Error processing consumption total: $e');
-            // Continue with the next item
           }
         }
       }
 
-      // Get categories with null-safety
       List<String> categories = [];
       if (json['categories'] != null) {
         try {
@@ -173,7 +154,6 @@ class AnalyticsReport {
         }
       }
 
-      // If categories is still empty, try to get from consumption totals
       if (categories.isEmpty && json['consumption_totals'] != null) {
         try {
           final List<dynamic> totals = json['consumption_totals'];
@@ -191,7 +171,6 @@ class AnalyticsReport {
         }
       }
 
-      // Extract date range (safe version)
       DateRange dateRange;
       try {
         if (json['date_range'] != null && json['date_range'] is Map) {
@@ -199,7 +178,6 @@ class AnalyticsReport {
           final endDate = json['date_range']['endDate']?.toString() ?? '';
           dateRange = DateRange(startDate: startDate, endDate: endDate);
         } else {
-          // Fallback: use start_date and end_date directly
           final startDate = json['start_date']?.toString() ?? '';
           final endDate = json['end_date']?.toString() ?? '';
           dateRange = DateRange(startDate: startDate, endDate: endDate);
@@ -212,7 +190,6 @@ class AnalyticsReport {
         );
       }
 
-      // Extract all other properties with null safety
       final String id = json['id']?.toString() ?? '';
       final String name = json['name']?.toString() ?? 'Reporte';
       final String createdAt = json['created_at']?.toString() ?? DateTime.now().toIso8601String();
@@ -231,7 +208,6 @@ class AnalyticsReport {
 
       final String periodType = json['period_type']?.toString() ?? 'weekly';
 
-      // Extract snapshot IDs safely
       String? startSnapshotId;
       String? endSnapshotId;
       try {
@@ -241,7 +217,6 @@ class AnalyticsReport {
         debugPrint('Error extracting snapshot IDs: $e');
       }
 
-      // Create the report
       final report = AnalyticsReport.withStringPeriodType(
         id: id,
         name: name,
@@ -264,13 +239,11 @@ class AnalyticsReport {
       return report;
     } catch (e) {
       debugPrint('Error creating AnalyticsReport: $e');
-      rethrow; // Re-lanzar la excepción para que se maneje en niveles superiores
+      rethrow;
     }
   }
 
-  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
-    // Convert consumption data to JSON format
     final List<Map<String, dynamic>> dataPoints = [];
     consumptionData.forEach((category, points) {
       for (var point in points) {
@@ -278,7 +251,6 @@ class AnalyticsReport {
       }
     });
 
-    // Convert total consumption to JSON format
     final List<Map<String, dynamic>> totals = [];
     totalConsumption.forEach((category, count) {
       totals.add({
@@ -294,7 +266,7 @@ class AnalyticsReport {
       'center': centerId,
       'categories': categories,
       'date_range': dateRange.toJson(),
-      'period_type': periodType, // Store the string
+      'period_type': periodType,
       'data_points': dataPoints,
       'consumption_totals': totals,
       'start_snapshot': startSnapshotId,
@@ -302,7 +274,6 @@ class AnalyticsReport {
     };
   }
 
-  /// Formats the creation date for display
   String getFormattedDate() {
     try {
       final date = DateTime.parse(createdAt);
@@ -312,7 +283,6 @@ class AnalyticsReport {
     }
   }
 
-  /// Gets the category with the highest consumption
   String getMostConsumedCategory() {
     if (totalConsumption.isEmpty) return 'N/A';
 
@@ -330,7 +300,6 @@ class AnalyticsReport {
     return '$maxCategory ($maxValue)';
   }
 
-  /// Gets the category with the lowest consumption
   String getLeastConsumedCategory() {
     if (totalConsumption.isEmpty) return 'N/A';
 
@@ -348,7 +317,6 @@ class AnalyticsReport {
     return '$minCategory ($minValue)';
   }
 
-  /// Calculates average daily consumption by category
   Map<String, double> getAverageDailyConsumption() {
     final days = dateRange.getDaysCount();
     if (days <= 0) return {};
@@ -362,7 +330,6 @@ class AnalyticsReport {
     return averages;
   }
 
-  /// Gets the days with peak consumption by category
   Map<String, String> getPeakConsumptionDays() {
     final Map<String, String> peakDays = {};
 
@@ -383,11 +350,10 @@ class AnalyticsReport {
   }
 }
 
-/// Data point for consumption analysis
 class ConsumptionDataPoint {
-  final String date; // Date of the data point (in ISO format)
-  final int count; // Quantity consumed
-  final String? note; // Optional note
+  final String date;
+  final int count;
+  final String? note;
 
   ConsumptionDataPoint({
     required this.date,
@@ -395,21 +361,17 @@ class ConsumptionDataPoint {
     this.note,
   });
 
-  /// Creates an instance from a JSON map
   factory ConsumptionDataPoint.fromJson(Map<String, dynamic> json) {
     try {
-      // Debug the fields
       if (kDebugMode) {
         print('DataPoint JSON: $json');
       }
 
-      // Extract date with null-safety
       String dateStr = '';
       if (json['date'] != null) {
         dateStr = json['date'].toString();
       }
 
-      // Extract count with null-safety
       int countValue = 0;
       if (json['count'] != null) {
         if (json['count'] is int) {
@@ -419,7 +381,6 @@ class ConsumptionDataPoint {
         }
       }
 
-      // Extract note safely - this is where the error is happening
       String? noteValue;
       if (json.containsKey('note') && json['note'] != null) {
         noteValue = json['note'].toString();
@@ -432,7 +393,6 @@ class ConsumptionDataPoint {
       );
     } catch (e) {
       debugPrint('Error creating ConsumptionDataPoint: $e');
-      // Return a default object in case of error
       return ConsumptionDataPoint(
         date: DateTime.now().toIso8601String(),
         count: 0,
@@ -443,13 +403,11 @@ class ConsumptionDataPoint {
 
   /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
-    // Create the base map first
     final Map<String, dynamic> map = {
       'date': date,
       'count': count,
     };
 
-    // Add the note only if it's not null
     if (note != null) {
       map['note'] = note;
     }
@@ -457,7 +415,6 @@ class ConsumptionDataPoint {
     return map;
   }
 
-  /// Gets the DateTime object
   DateTime getDateTime() {
     try {
       return DateTime.parse(date);
@@ -466,7 +423,6 @@ class ConsumptionDataPoint {
     }
   }
 
-  /// Formats the date in a readable way
   String getFormattedDate() {
     try {
       final dateTime = DateTime.parse(date);
@@ -482,17 +438,15 @@ class ConsumptionDataPoint {
   }
 }
 
-/// Date range for analysis
 class DateRange {
-  final String startDate; // Start date in ISO format
-  final String endDate; // End date in ISO format
+  final String startDate;
+  final String endDate;
 
   DateRange({
     required this.startDate,
     required this.endDate,
   });
 
-  /// Creates an instance from a JSON map
   factory DateRange.fromJson(Map<String, dynamic> json) {
     try {
       return DateRange(
@@ -508,7 +462,6 @@ class DateRange {
     }
   }
 
-  /// Converts the instance to a JSON map
   Map<String, dynamic> toJson() {
     return {
       'startDate': startDate,
@@ -516,7 +469,6 @@ class DateRange {
     };
   }
 
-  /// Creates a range for the last week
   factory DateRange.lastWeek() {
     final now = DateTime.now();
     final endDate = now;
@@ -528,7 +480,6 @@ class DateRange {
     );
   }
 
-  /// Creates a range for the last month
   factory DateRange.lastMonth() {
     final now = DateTime.now();
     final endDate = now;
@@ -541,7 +492,6 @@ class DateRange {
     );
   }
 
-  /// Gets the start DateTime
   DateTime getStartDateTime() {
     try {
       return DateTime.parse(startDate);
@@ -550,7 +500,6 @@ class DateRange {
     }
   }
 
-  /// Gets the end DateTime
   DateTime getEndDateTime() {
     try {
       return DateTime.parse(endDate);
@@ -559,7 +508,6 @@ class DateRange {
     }
   }
 
-  /// Calculates the number of days in the range
   int getDaysCount() {
     try {
       final start = DateTime.parse(startDate);
@@ -571,7 +519,6 @@ class DateRange {
     }
   }
 
-  /// Formats the date range as a readable string
   String getFormattedRange() {
     try {
       final start = DateTime.parse(startDate);
@@ -584,7 +531,6 @@ class DateRange {
   }
 }
 
-/// Period type for analysis
 enum PeriodType {
   weekly,
   monthly,

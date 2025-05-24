@@ -1,4 +1,3 @@
-/// Modelo para representar un centro de acopio
 class Center {
   final int id;
   final String name;
@@ -10,7 +9,6 @@ class Center {
     required this.address,
   });
 
-  /// Crea una instancia desde un mapa JSON
   factory Center.fromJson(Map<String, dynamic> json) {
     return Center(
       id: json['id'] is String ? int.parse(json['id']) : json['id'] as int,
@@ -19,7 +17,6 @@ class Center {
     );
   }
 
-  /// Convierte la instancia a un mapa JSON
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -28,7 +25,6 @@ class Center {
     };
   }
 
-  /// Crea una copia de este centro con los campos especificados actualizados
   Center copyWith({
     int? id,
     String? name,

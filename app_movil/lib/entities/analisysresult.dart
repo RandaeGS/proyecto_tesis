@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 
-/// Modelo para representar un resultado de análisis de imagen
 class AnalysisResult {
   final String id;
   final String fechaCreacion;
@@ -12,9 +11,9 @@ class AnalysisResult {
   final String resultados;
   final List<Map<String, dynamic>> detecciones;
   final String modeloUsado;
-  final int? centerId;  // ID del centro asociado
-  final String? imageId;  // ID de la imagen asociada
-  final bool? confirmed;  // Indica si ha sido confirmado por el usuario
+  final int? centerId;
+  final String? imageId;
+  final bool? confirmed;
 
   AnalysisResult({
     required this.id,
@@ -30,9 +29,7 @@ class AnalysisResult {
     this.confirmed,
   });
 
-  /// Crea una instancia desde un mapa JSON (formato guardado)
   factory AnalysisResult.fromJsonMap(Map<String, dynamic> map) {
-    // Convertir lista de detecciones
     List<Map<String, dynamic>> detecList = [];
     if (map['detecciones'] != null) {
       detecList = List<Map<String, dynamic>>.from(
@@ -41,7 +38,6 @@ class AnalysisResult {
       );
     }
 
-    // Parsear centerId si está presente
     int? parsedCenterId;
     if (map.containsKey('center_id')) {
       if (map['center_id'] is int) {
@@ -56,7 +52,6 @@ class AnalysisResult {
       imageId = map['image_id'].toString();
     }
 
-    // Obtener estado de confirmación
     bool? confirmed;
     if (map.containsKey('confirmed')) {
       if (map['confirmed'] is bool) {
@@ -85,26 +80,20 @@ class AnalysisResult {
     );
   }
 
-  /// Crea una instancia desde un mapa JSON (formato API)
   factory AnalysisResult.fromJson(Map<String, dynamic> json) {
     debugPrint('Procesando AnalysisResult.fromJson con: ${json.keys}');
 
-    // Intentamos extraer los resultados
     final resultadosData = json['resultados'] ?? {};
     List<Map<String, dynamic>> detecciones = [];
     int objCount = 0;
     String modelType = '';
     double processingTime = 0.0;
 
-    // Procesamos la estructura de resultados
     if (resultadosData is Map) {
-      // Extraer el tipo de modelo
       modelType = resultadosData['model_type'] ?? '';
 
-      // Extraer conteo de objetos
       objCount = resultadosData['count'] ?? 0;
 
-      // Extraer tiempo de procesamiento (buscar en múltiples posibles claves)
       List<String> possibleTimeKeys = ['processing_time', 'tiempo', 'time'];
       for (var key in possibleTimeKeys) {
         if (resultadosData.containsKey(key)) {
@@ -119,21 +108,18 @@ class AnalysisResult {
         }
       }
 
-      // Extraer detecciones
       if (resultadosData.containsKey('detections') && resultadosData['detections'] is List) {
         final List detectionsList = resultadosData['detections'] as List;
         detecciones = detectionsList.map((item) =>
         Map<String, dynamic>.from(item as Map)
         ).toList();
 
-        // Asegurar que el conteo coincida si no estaba explícito
         if (objCount == 0) {
           objCount = detecciones.length;
         }
       }
     }
 
-    // También intentar obtener el tiempo de procesamiento del objeto principal
     if (processingTime == 0.0 && json.containsKey('tiempo_procesamiento')) {
       var timeValue = json['tiempo_procesamiento'];
       if (timeValue is num) {
@@ -143,10 +129,8 @@ class AnalysisResult {
       }
     }
 
-    // Crear una versión formateada del JSON de resultados para mostrar
     final formattedJson = _formatResultJson(resultadosData);
 
-    // Parsear centerId si está presente
     int? parsedCenterId;
     if (json.containsKey('center_id')) {
       if (json['center_id'] is int) {
@@ -156,13 +140,11 @@ class AnalysisResult {
       }
     }
 
-    // Parsear imageId si está presente
     String? imageId;
     if (json.containsKey('image_id') && json['image_id'] != null) {
       imageId = json['image_id'].toString();
     }
 
-    // Determinar si está confirmado
     bool? confirmed;
     if (json.containsKey('confirmed')) {
       if (json['confirmed'] is bool) {
@@ -179,7 +161,7 @@ class AnalysisResult {
       fechaCreacion: json['fecha_creacion'] ?? DateTime.now().toString(),
       tipoModelo: json['tipo_modelo'] ?? modelType,
       numeroObjetos: json['numero_objetos'] ?? objCount,
-      tiempoProcesamiento: processingTime,  // Usar el valor extraído
+      tiempoProcesamiento: processingTime,
       resultados: formattedJson,
       detecciones: detecciones,
       modeloUsado: modelType,
@@ -190,7 +172,6 @@ class AnalysisResult {
   }
 
 
-  /// Método para formatear el JSON de resultados de manera más legible
   static String _formatResultJson(Map<String, dynamic> json) {
     const JsonEncoder encoder = JsonEncoder.withIndent('  ');
     try {
@@ -200,7 +181,6 @@ class AnalysisResult {
     }
   }
 
-  /// Convierte la instancia a un mapa JSON para almacenamiento
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -217,7 +197,6 @@ class AnalysisResult {
     };
   }
 
-  /// Método para obtener una descripción resumida de cada detección
   List<String> getDetectionDescriptions() {
     return detecciones.map((detection) {
       final className = detection['class'] ?? 'Desconocido';
@@ -228,7 +207,6 @@ class AnalysisResult {
     }).toList();
   }
 
-  /// Crea una copia de este resultado con los campos especificados actualizados
   AnalysisResult copyWith({
     String? id,
     String? fechaCreacion,

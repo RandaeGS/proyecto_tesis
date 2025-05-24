@@ -139,7 +139,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
     try {
       if (_centerId == null) return;
 
-      // PRIMERO: Intentar cargar desde el backend
       final reportProvider = Provider.of<InventoryReportProvider>(context, listen: false);
       final backendConfig = await reportProvider.loadIdealCounts(_centerId!);
 
@@ -147,7 +146,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
         _customIdealCounts = backendConfig;
         debugPrint('Configuración cargada desde backend: $_customIdealCounts');
       } else {
-        // SI FALLA: Cargar desde SharedPreferences (local)
         final prefs = await SharedPreferences.getInstance();
         final savedConfig = prefs.getString('ideal_counts_${_centerId}');
 
@@ -155,7 +153,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
           debugPrint('Cargando configuración guardada localmente');
           final Map<String, dynamic> savedMap = json.decode(savedConfig);
 
-          // Filtrar solo las categorías activas
           final filteredConfig = savedMap.map(
                   (key, value) => MapEntry(key, value is int ? value : int.tryParse(value.toString()) ?? 0)
           )..removeWhere((key, _) => !_activeCategories.contains(key));
@@ -172,7 +169,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
       }
     } catch (e) {
       debugPrint('Error al cargar configuración: $e');
-      // Usar valores por defecto
       _customIdealCounts = {};
       for (var category in _activeCategories) {
         _customIdealCounts[category] = InventoryReportService.defaultIdealCounts[category] ?? 0;
@@ -188,11 +184,9 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
 
       _updateCustomIdealCounts();
 
-      // Guardar localmente (SharedPreferences)
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('ideal_counts_${_centerId}', json.encode(_customIdealCounts));
 
-      // NUEVO: Guardar en el backend
       final success = await Provider.of<InventoryReportProvider>(context, listen: false)
           .saveIdealCounts(_centerId!, _customIdealCounts);
 
@@ -225,7 +219,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
     _clearControllers();
 
     try {
-      // Solo inicializar controladores para categorías activas
       for (var category in _activeCategories) {
         var value = _customIdealCounts[category] ?? 
                    InventoryReportService.defaultIdealCounts[category] ?? 0;
@@ -267,7 +260,6 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
       return;
     }
 
-    // Asegurarse de usar la configuración más reciente
     _updateCustomIdealCounts();
     await _saveConfiguration();
 
@@ -293,7 +285,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> with Sing
           .generateReport(
         inventorySnapshot,
         isEmergency: isEmergency,
-        customIdealCounts: _customIdealCounts, // Usar configuración actualizada
+        customIdealCounts: _customIdealCounts,
       );
 
       if (report != null && mounted) {
