@@ -14,6 +14,8 @@ import 'screens/auth_screens/register_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/user_management/user_list_screen.dart';
 import 'screens/image_capture_screen.dart';
+import 'screens/yolo_test_screen.dart'; // Nueva importación
+import 'screens/realtime_camera_yolo_screen.dart'; // Detección en tiempo real mejorada
 import 'services/auth_services/auth_provider.dart';
 import 'services/config.dart';
 import 'services/deteccion_services/analysis_provider.dart';
@@ -111,6 +113,8 @@ class MyApp extends StatelessWidget {
         '/inventory': (context) => const InventorySnapshotScreen(),
         '/reports': (context) => const InventoryReportScreen(),
         '/analytics': (context) => const AnalyticsScreen(),
+        '/yolo-test': (context) => YoloTestScreen(), // Nueva ruta
+        '/yolo-realtime-improved': (context) => RealtimeCameraYoloScreen(), // Tiempo real mejorado
       },
       // Usar onGenerateRoute para permitir pasar parámetros al login
       onGenerateRoute: (settings) {

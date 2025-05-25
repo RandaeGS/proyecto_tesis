@@ -131,6 +131,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/yolo-realtime-improved');
+                  },
+                  child: Text('YOLOv8 Tiempo Real 🔥'),
+                ),
+
                 const SizedBox(height: 16),
 
                 // Mostrar mensaje de error si existe
@@ -151,6 +158,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     icon: Icons.info_outline,
                   ),
                 ],
+                // Usar este botón para probar
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/yolo-photo');
+                  },
+                  child: Text('YOLOv8 Captura Foto'),
+                ),
 
                 // Enlace a la configuración
                 const SizedBox(height: 24),
