@@ -16,17 +16,15 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-// Asegúrate que el import del binding sea el correcto para tu layout de esta actividad
 import com.example.app_movil.databinding.ActivityMainBinding
 import com.example.surendramaran.yolov8tflite.BoundingBox
-// Asegúrate que este import de Constants sea el correcto o define las constantes aquí mismo
-// o pásalas por Intent
 import com.example.surendramaran.yolov8tflite.Constants.LABELS_PATH
 import com.example.surendramaran.yolov8tflite.Constants.MODEL_PATH
 import com.example.surendramaran.yolov8tflite.Detector
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-
+import java.util.concurrent.TimeUnit // Necesario para awaitTermination
+import java.util.concurrent.atomic.AtomicBoolean // Para flags thread-safe
 
 class YoloDetectionActivity : AppCompatActivity(), Detector.DetectorListener {
     private lateinit var binding: ActivityMainBinding
@@ -39,58 +37,55 @@ class YoloDetectionActivity : AppCompatActivity(), Detector.DetectorListener {
     private lateinit var detector: Detector
 
     private lateinit var cameraExecutor: ExecutorService
+    private val isActivityDestroying = AtomicBoolean(false) // Flag para indicar si la actividad se está destruyendo
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater) // MODIFICADO AQUÍ
+        binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        Log.d(TAG, "onCreate called")
 
-        // Revisa que MODEL_PATH y LABELS_PATH sean accesibles.
-        // Si 'com.example.surendramaran.yolov8tflite.Constants' no es parte de tu
-        // módulo android de Flutter, necesitas copiar esa clase Constants o
-        // definir las rutas aquí, o pasarlas por Intent desde MainActivity de Flutter.
-        // Por ejemplo:
-        // val modelPath = intent.getStringExtra("modelPath") ?: "best_float32.tflite"
-        // val labelPath = intent.getStringExtra("labelPath") ?: "labels.txt"
-        // detector = Detector(baseContext, modelPath, labelPath, this)
         detector = Detector(baseContext, MODEL_PATH, LABELS_PATH, this)
         detector.setup()
 
-        if (allPermissionsGranted()) {
-            startCamera()
-        } else {
-            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
-        }
-
         cameraExecutor = Executors.newSingleThreadExecutor()
+
+        // Los permisos se solicitan en onResume si es necesario
     }
 
     private fun startCamera() {
+        Log.d(TAG, "startCamera called")
+        isActivityDestroying.set(false) // Asegurarse que el flag esté en false al iniciar/reiniciar la cámara
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
-            cameraProvider  = cameraProviderFuture.get()
-            bindCameraUseCases()
+            try {
+                cameraProvider = cameraProviderFuture.get()
+                bindCameraUseCases()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get camera provider", e)
+            }
         }, ContextCompat.getMainExecutor(this))
     }
 
     private fun bindCameraUseCases() {
-        val cameraProvider = cameraProvider ?: throw IllegalStateException("Camera initialization failed.")
+        val localCameraProvider = cameraProvider ?: run {
+            Log.e(TAG, "Camera initialization failed: cameraProvider is null.")
+            return
+        }
+        Log.d(TAG, "bindCameraUseCases called")
 
         val rotation = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            // Usa el display asociado con el contexto de la vista si es posible para mayor precisión,
-            // o el display por defecto de la actividad.
             binding.viewFinder.display?.rotation ?: display?.rotation ?: Surface.ROTATION_0
         } else {
             @Suppress("DEPRECATION")
             windowManager.defaultDisplay?.rotation ?: Surface.ROTATION_0
         }
 
-        val cameraSelector = CameraSelector
-            .Builder()
+        val cameraSelector = CameraSelector.Builder()
             .requireLensFacing(CameraSelector.LENS_FACING_BACK)
             .build()
 
-        preview =  Preview.Builder()
+        preview = Preview.Builder()
             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             .setTargetRotation(rotation)
             .build()
@@ -98,57 +93,53 @@ class YoloDetectionActivity : AppCompatActivity(), Detector.DetectorListener {
         imageAnalyzer = ImageAnalysis.Builder()
             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setTargetRotation(rotation) // Asegúrate que sea la misma rotación para análisis y preview
+            .setTargetRotation(rotation)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
 
         imageAnalyzer?.setAnalyzer(cameraExecutor) { imageProxy ->
-            val bitmapBuffer =
-                Bitmap.createBitmap(
-                    imageProxy.width,
-                    imageProxy.height,
-                    Bitmap.Config.ARGB_8888
-                )
-            // El bloque 'use' se encarga de cerrar el imageProxy automáticamente.
-            // No necesitas llamar a imageProxy.close() explícitamente después.
-            imageProxy.use {
+            if (isActivityDestroying.get()) { // Comprobar ANTES de cualquier procesamiento
+                imageProxy.close()
+                return@setAnalyzer
+            }
+
+            val bitmapBuffer = Bitmap.createBitmap(
+                imageProxy.width,
+                imageProxy.height,
+                Bitmap.Config.ARGB_8888
+            )
+            imageProxy.use { // Esto cierra imageProxy automáticamente
                 bitmapBuffer.copyPixelsFromBuffer(it.planes[0].buffer)
             }
-            // imageProxy.close() // ESTA LÍNEA YA NO ES NECESARIA Y PUEDE CAUSAR ERROR
 
             val matrix = Matrix().apply {
                 postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
-
                 if (isFrontCamera) {
-                    postScale(
-                        -1f,
-                        1f,
-                        imageProxy.width.toFloat(),
-                        imageProxy.height.toFloat()
-                    )
+                    postScale(-1f, 1f, imageProxy.width.toFloat(), imageProxy.height.toFloat())
                 }
             }
-
             val rotatedBitmap = Bitmap.createBitmap(
-                bitmapBuffer, 0, 0, bitmapBuffer.width, bitmapBuffer.height,
-                matrix, true
+                bitmapBuffer, 0, 0, bitmapBuffer.width, bitmapBuffer.height, matrix, true
             )
 
+            if (isActivityDestroying.get()) { // Doble chequeo por si el flag cambió durante el preprocesamiento
+                return@setAnalyzer
+            }
             detector.detect(rotatedBitmap)
         }
 
-        cameraProvider.unbindAll()
+        localCameraProvider.unbindAll() // Desvincular antes de volver a vincular
 
         try {
-            camera = cameraProvider.bindToLifecycle(
+            camera = localCameraProvider.bindToLifecycle(
                 this,
                 cameraSelector,
                 preview,
                 imageAnalyzer
             )
-            // Ahora 'binding.viewFinder' se referirá al PreviewView de 'activity_yolo_detection.xml'
             preview?.setSurfaceProvider(binding.viewFinder.surfaceProvider)
-        } catch(exc: Exception) {
+            Log.d(TAG, "Camera use cases bound successfully")
+        } catch (exc: Exception) {
             Log.e(TAG, "Use case binding failed", exc)
         }
     }
@@ -158,55 +149,93 @@ class YoloDetectionActivity : AppCompatActivity(), Detector.DetectorListener {
     }
 
     override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<String>,
-        grantResults: IntArray
+        requestCode: Int, permissions: Array<String>, grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        Log.d(TAG, "onRequestPermissionsResult called. RequestCode: $requestCode")
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
             if (allPermissionsGranted()) {
+                Log.i(TAG, "Camera permission granted. Starting camera.")
                 startCamera()
             } else {
-                Log.w(TAG, "Camera permission not granted. Finishing Activity.")
-                // Considera mostrar un mensaje al usuario antes de cerrar
+                Log.e(TAG, "Camera permission not granted. Finishing activity.")
+                // Podrías mostrar un mensaje al usuario aquí antes de cerrar.
                 finish()
             }
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        detector.clear()
-        cameraExecutor.shutdown()
-    }
-
     override fun onResume() {
         super.onResume()
-        // Solo inicia la cámara si los permisos están concedidos y la cámara no se ha iniciado ya
-        // (cameraProvider es una buena proxy para esto, o simplemente camera == null)
-        if (allPermissionsGranted() && camera == null){
+        Log.d(TAG, "onResume called")
+        isActivityDestroying.set(false) // Marcar que la actividad está activa
+        if (allPermissionsGranted()) {
             startCamera()
+        } else {
+            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        Log.d(TAG, "onPause called")
+        // Es una buena práctica desvincular los casos de uso aquí para liberar la cámara
+        // cuando la actividad no está en primer plano.
+        // Si no se hace aquí, el flag isActivityDestroying es aún más crucial.
+        cameraProvider?.unbindAll()
+        Log.d(TAG, "Camera use cases unbound in onPause.")
+        // No establecer isActivityDestroying a true aquí, solo cuando realmente se destruye.
+    }
+
+
+    override fun onDestroy() {
+        Log.d(TAG, "onDestroy: Setting isActivityDestroying to true.")
+        isActivityDestroying.set(true) // 1. Marcar que la actividad se está destruyendo
+
+        // 2. Desvincular explícitamente aquí también por si onPause no se llamó o falló
+        Log.d(TAG, "onDestroy: Unbinding camera use cases.")
+        cameraProvider?.unbindAll() // Ayuda a detener el flujo de ImageAnalysis
+
+        Log.d(TAG, "onDestroy: Shutting down cameraExecutor.")
+        cameraExecutor.shutdown() // 3. Iniciar el apagado del executor
+        try {
+            // Esperar a que las tareas existentes terminen por un tiempo limitado
+            if (!cameraExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS)) {
+                Log.w(TAG, "onDestroy: Camera executor did not terminate in time, forcing shutdownNow.")
+                cameraExecutor.shutdownNow() // Forzar si no terminaron
+            } else {
+                Log.d(TAG, "onDestroy: Camera executor terminated gracefully.")
+            }
+        } catch (e: InterruptedException) {
+            Log.w(TAG, "onDestroy: Interrupted while waiting for camera executor, forcing shutdownNow.")
+            cameraExecutor.shutdownNow()
+            Thread.currentThread().interrupt() // Re-establecer el flag de interrupción
+        }
+
+        Log.d(TAG, "onDestroy: Clearing detector.")
+        detector.clear() // 4. Limpiar el detector SÓLO DESPUÉS de que el executor se haya detenido
+
+        super.onDestroy() // 5. Llamar al super método al final
+        Log.d(TAG, "onDestroy: Completed.")
+    }
+
     companion object {
-        private const val TAG = "YoloDetectionActivity" // Cambiado para diferenciar logs
+        private const val TAG = "YoloDetectionActivity"
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf( // Simplificado a arrayOf
-            Manifest.permission.CAMERA
-        )
+        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
     }
 
     override fun onEmptyDetect() {
-        // 'binding.overlay' se referirá al OverlayView de 'activity_yolo_detection.xml'
-        binding.overlay.clear() // Llama al método clear de tu OverlayView si lo tienes
+        if (isActivityDestroying.get()) return // Evitar actualizaciones de UI si se está destruyendo
+        binding.overlay.clear()
         binding.overlay.invalidate()
     }
 
     override fun onDetect(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
+        if (isActivityDestroying.get()) return // Evitar actualizaciones de UI si se está destruyendo
         runOnUiThread {
             binding.inferenceTime.text = "${inferenceTime}ms"
-            binding.overlay.setResults(boundingBoxes) // Asumiendo que tu OverlayView en Flutter tiene setResults
+            binding.overlay.setResults(boundingBoxes)
             binding.overlay.invalidate()
         }
     }
