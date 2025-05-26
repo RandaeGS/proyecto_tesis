@@ -9,9 +9,9 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
 import androidx.core.content.ContextCompat
-import java.util.LinkedList
-import kotlin.math.max
 import com.example.app_movil.R
+import java.lang.reflect.Field
+import java.lang.reflect.Method
 
 class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs) {
 
@@ -19,6 +19,7 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
     private var boxPaint = Paint()
     private var textBackgroundPaint = Paint()
     private var textPaint = Paint()
+    private var fillPaint = Paint()
 
     private var bounds = Rect()
 
@@ -27,60 +28,71 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
     }
 
     fun clear() {
-        textPaint.reset()
-        textBackgroundPaint.reset()
-        boxPaint.reset()
+        results = emptyList()
         invalidate()
-        initPaints()
     }
 
     private fun initPaints() {
-        textBackgroundPaint.color = Color.BLACK
+        boxPaint.color = ContextCompat.getColor(context!!, R.color.bounding_box_color)
+        boxPaint.strokeWidth = 10F
+        boxPaint.style = Paint.Style.STROKE
+        boxPaint.isAntiAlias = true
+
+        fillPaint.color = Color.argb(30, 255, 255, 0)
+        fillPaint.style = Paint.Style.FILL
+
+        textBackgroundPaint.color = Color.argb(200, 0, 0, 0)
         textBackgroundPaint.style = Paint.Style.FILL
-        textBackgroundPaint.textSize = 50f
+        textBackgroundPaint.textSize = 60f
 
         textPaint.color = Color.WHITE
         textPaint.style = Paint.Style.FILL
-        textPaint.textSize = 50f
-
-        boxPaint.color = ContextCompat.getColor(context!!, R.color.bounding_box_color)
-        boxPaint.strokeWidth = 8F
-        boxPaint.style = Paint.Style.STROKE
+        textPaint.textSize = 60f
+        textPaint.isAntiAlias = true
+        textPaint.typeface = android.graphics.Typeface.DEFAULT_BOLD
     }
 
     override fun draw(canvas: Canvas) {
         super.draw(canvas)
 
-        results.forEach {
-            val left = it.x1 * width
-            val top = it.y1 * height
-            val right = it.x2 * width
-            val bottom = it.y2 * height
+        results.forEach { box ->
+            val left = box.x1 * width
+            val top = box.y1 * height
+            val right = box.x2 * width
+            val bottom = box.y2 * height
 
+            canvas.drawRect(left, top, right, bottom, fillPaint)
             canvas.drawRect(left, top, right, bottom, boxPaint)
-            val drawableText = it.clsName
 
-            textBackgroundPaint.getTextBounds(drawableText, 0, drawableText.length, bounds)
+            // Texto seguro que funciona con o sin score
+            val confidencePercentage = box.cnf * 100
+            val drawableText = "${box.clsName} ${"%.2f".format(confidencePercentage)}%"
+
+            textPaint.getTextBounds(drawableText, 0, drawableText.length, bounds)
+
             val textWidth = bounds.width()
             val textHeight = bounds.height()
-            canvas.drawRect(
+            val textPadding = 20f
+
+            val textBackgroundRect = RectF(
                 left,
                 top,
-                left + textWidth + BOUNDING_RECT_TEXT_PADDING,
-                top + textHeight + BOUNDING_RECT_TEXT_PADDING,
-                textBackgroundPaint
+                left + textWidth + textPadding * 2,
+                top + textHeight + textPadding * 2
             )
-            canvas.drawText(drawableText, left, top + bounds.height(), textPaint)
+            canvas.drawRoundRect(textBackgroundRect, 10f, 10f, textBackgroundPaint)
 
+            canvas.drawText(
+                drawableText,
+                left + textPadding,
+                top + textHeight + textPadding,
+                textPaint
+            )
         }
     }
 
     fun setResults(boundingBoxes: List<BoundingBox>) {
         results = boundingBoxes
         invalidate()
-    }
-
-    companion object {
-        private const val BOUNDING_RECT_TEXT_PADDING = 8
     }
 }
