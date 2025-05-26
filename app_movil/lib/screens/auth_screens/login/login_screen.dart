@@ -166,6 +166,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Text('YOLOv8 Captura Foto'),
                 ),
 
+
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/yolo-launcher');
+                  },
+                  child: Text('YOLOv8 Captura Foto'),
+                ),
+
+
                 // Enlace a la configuración
                 const SizedBox(height: 24),
                 TextButton.icon(

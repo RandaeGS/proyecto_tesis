@@ -1,3 +1,4 @@
+import 'package:app_movil/screens/yolo_launcher_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -115,6 +116,8 @@ class MyApp extends StatelessWidget {
         '/analytics': (context) => const AnalyticsScreen(),
         '/yolo-test': (context) => YoloTestScreen(), // Nueva ruta
         '/yolo-realtime-improved': (context) => RealtimeCameraYoloScreen(), // Tiempo real mejorado
+        '/yolo-launcher': (context) => YoloLauncherScreen(),
+
       },
       // Usar onGenerateRoute para permitir pasar parámetros al login
       onGenerateRoute: (settings) {
