@@ -14,6 +14,7 @@ class AnalysisResult {
   final int? centerId;
   final String? imageId;
   final bool? confirmed;
+  final String? outputImageBase64;
 
   AnalysisResult({
     required this.id,
@@ -27,6 +28,7 @@ class AnalysisResult {
     this.centerId,
     this.imageId,
     this.confirmed,
+    this.outputImageBase64,
   });
 
   factory AnalysisResult.fromJsonMap(Map<String, dynamic> map) {
@@ -63,6 +65,14 @@ class AnalysisResult {
       }
     }
 
+    // Extraer la imagen de salida
+    String? outputImage;
+    if (map.containsKey('output_image') && map['output_image'] != null) {
+      outputImage = map['output_image'].toString();
+    } else if (map.containsKey('visualization') && map['visualization'] != null) {
+      outputImage = map['visualization'].toString();
+    }
+
     return AnalysisResult(
       id: map['id'] ?? '',
       fechaCreacion: map['fechaCreacion'] ?? '',
@@ -77,6 +87,7 @@ class AnalysisResult {
       centerId: parsedCenterId,
       imageId: imageId,
       confirmed: confirmed,
+      outputImageBase64: outputImage,
     );
   }
 
@@ -92,7 +103,7 @@ class AnalysisResult {
     if (resultadosData is Map) {
       modelType = resultadosData['model_type'] ?? '';
 
-      objCount = resultadosData['count'] ?? 0;
+      objCount = resultadosData['count'] ?? resultadosData['count_objects'] ?? 0;
 
       List<String> possibleTimeKeys = ['processing_time', 'tiempo', 'time'];
       for (var key in possibleTimeKeys) {
@@ -156,6 +167,29 @@ class AnalysisResult {
       }
     }
 
+    // Extraer la imagen de salida de múltiples ubicaciones posibles
+    String? outputImage;
+
+    // Primero intentar desde resultadosData
+    if (resultadosData is Map) {
+      if (resultadosData.containsKey('output_image') && resultadosData['output_image'] != null) {
+        outputImage = resultadosData['output_image'].toString();
+      } else if (resultadosData.containsKey('visualization') && resultadosData['visualization'] != null) {
+        outputImage = resultadosData['visualization'].toString();
+      }
+    }
+
+    // Si no se encontró, buscar en el JSON principal
+    if (outputImage == null) {
+      if (json.containsKey('output_image') && json['output_image'] != null) {
+        outputImage = json['output_image'].toString();
+      } else if (json.containsKey('visualization') && json['visualization'] != null) {
+        outputImage = json['visualization'].toString();
+      }
+    }
+
+    debugPrint('Output image encontrada: ${outputImage != null ? "Sí (${outputImage!.length} chars)" : "No"}');
+
     return AnalysisResult(
       id: json['id']?.toString() ?? json['deteccion_id']?.toString() ?? '',
       fechaCreacion: json['fecha_creacion'] ?? DateTime.now().toString(),
@@ -168,9 +202,9 @@ class AnalysisResult {
       centerId: parsedCenterId,
       imageId: imageId,
       confirmed: confirmed,
+      outputImageBase64: outputImage,
     );
   }
-
 
   static String _formatResultJson(Map<String, dynamic> json) {
     const JsonEncoder encoder = JsonEncoder.withIndent('  ');
@@ -194,6 +228,7 @@ class AnalysisResult {
       'center_id': centerId,
       'image_id': imageId,
       'confirmed': confirmed,
+      'output_image': outputImageBase64,
     };
   }
 
@@ -207,6 +242,9 @@ class AnalysisResult {
     }).toList();
   }
 
+  // Método helper para verificar si tiene imagen de salida
+  bool get hasOutputImage => outputImageBase64 != null && outputImageBase64!.isNotEmpty;
+
   AnalysisResult copyWith({
     String? id,
     String? fechaCreacion,
@@ -219,6 +257,7 @@ class AnalysisResult {
     int? centerId,
     String? imageId,
     bool? confirmed,
+    String? outputImageBase64,
   }) {
     return AnalysisResult(
       id: id ?? this.id,
@@ -232,6 +271,7 @@ class AnalysisResult {
       centerId: centerId ?? this.centerId,
       imageId: imageId ?? this.imageId,
       confirmed: confirmed ?? this.confirmed,
+      outputImageBase64: outputImageBase64 ?? this.outputImageBase64,
     );
   }
 }

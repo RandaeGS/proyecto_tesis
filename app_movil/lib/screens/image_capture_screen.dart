@@ -384,7 +384,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
               items: const [
                 DropdownMenuItem(value: 'yolo', child: Text('YOLO')),
                 DropdownMenuItem(value: 'cl', child: Text('YOLO_2.0')),
-                DropdownMenuItem(value: 'ssd', child: Text('SSD')),
+                DropdownMenuItem(value: 'rf_detr', child: Text('RF_DETR')),
               ],
               onChanged: (value) {
                 if (value != null) {

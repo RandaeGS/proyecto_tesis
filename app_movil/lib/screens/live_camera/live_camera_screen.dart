@@ -357,7 +357,7 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
               },
             ),
 
-            // YOLO 2.0 (Claude)
+            // YOLO 2.0
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(8),
@@ -377,6 +377,29 @@ class _LiveCameraDetectionScreenState extends State<LiveCameraDetectionScreen> w
                 });
                 Provider.of<AnalysisProvider>(context, listen: false)
                     .setSelectedModel('cl');
+                Navigator.pop(context);
+              },
+            ),
+
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _selectedModel == 'rf_detr' ? Colors.purple.shade100 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.psychology_alt,
+                    color: _selectedModel == 'cl' ? Colors.purple : Colors.grey),
+              ),
+              title: const Text('RF DETR'),
+              subtitle: const Text('Modelo Anvanzado de Detección'),
+              selected: _selectedModel == 'rf_detr',
+              onTap: () {
+                setState(() {
+                  _selectedModel = 'rf_detr';
+                });
+                Provider.of<AnalysisProvider>(context, listen: false)
+                    .setSelectedModel('rf_detr');
                 Navigator.pop(context);
               },
             ),
