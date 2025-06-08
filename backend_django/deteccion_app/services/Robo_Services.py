@@ -1,133 +1,114 @@
+# services/Robo_Services.py
 import io
-import requests
-import logging
-from typing import Dict, Any, Optional
+import os
+import tempfile
+import time
+from typing import Dict, Any
 from PIL import Image
-from django.conf import settings
-
+from inference_sdk import InferenceHTTPClient
 from .model_service import ModelService
+import logging
 
 logger = logging.getLogger(__name__)
 
 
 class RoboflowService(ModelService):
     """
-    Implementación del servicio para la API de Roboflow
+    Servicio para RF-DETR usando la inference_sdk de Roboflow.
     """
+    def __init__(self):
+        self.client = InferenceHTTPClient(
+            api_url="https://serverless.roboflow.com",
+            api_key="Nh09oS7de2WO80DMVv7g"
+        )
+        self.workspace = "friasluna-ovd8y"
+        self.workflow = "detect-count-and-visualize"
 
-    def __init__(self, api_key: Optional[str] = None, model_id: Optional[str] = None):
-        """
-        Inicializa el servicio de Roboflow
-
-        Args:
-            api_key: Clave de API de Roboflow
-            model_id: ID del modelo en Roboflow (incluye versión)
-        """
-        # Valor específico de la API key
-        self.api_key = "ByAUZwtbGcbVgbaowa1Q"
-        self.model_id = "object-detection-ez3ce/1"
-
-        # No hay modelo local para cargar
-        self.model = None
-        logger.info(f"Inicializado RoboflowService con model_id: {self.model_id} y api_key: {self.api_key}")
-
-    def load_model(self) -> None:
-        """
-        No hay modelo para cargar en este caso
-        """
-        logger.info("No se requiere cargar un modelo para el servicio de Roboflow")
+    def load_model(self):
+        # No hace nada; la SDK es serverless
         pass
 
-    def process_image(self, image: Image.Image) -> Dict[str, Any]:
-        """
-        Envía una imagen a la API de Roboflow para su análisis
-
-        Args:
-            image: Imagen a procesar en formato PIL
-
-        Returns:
-            Diccionario con los resultados de la detección
-        """
-        # Convertir la imagen a bytes
-        buffered = io.BytesIO()
-        image.save(buffered, format="JPEG")
-        img_bytes = buffered.getvalue()
-
-        # URL correcta con el modelo incluido
-        url = f"https://detect.roboflow.com/{self.model_id}"
-
-        # Parámetros de consulta
-        params = {
-            "api_key": self.api_key,
-            "confidence": 40,
-            "overlap": 30,
-            "format": "json"
-        }
-
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-
+    def process_image(self, img: Image.Image) -> Dict[str, Any]:
         try:
-            # Loguear la URL y los parámetros para verificar
-            logger.info(f"Enviando solicitud a: {url} con params: {params}")
+            # Debug: información de la imagen recibida
+            logger.info(f"RF-DETR: Procesando imagen {img.size}, modo: {img.mode}")
 
-            # Enviar la solicitud POST con la imagen como datos binarios
-            response = requests.post(
-                url,
-                params=params,
-                data=img_bytes,
-                headers=headers
+            # Guardar imagen para debug (temporal)
+            debug_path = f"/tmp/debug_roboflow_{int(time.time())}.png"
+            img.save(debug_path)
+            logger.info(f"RF-DETR: Imagen guardada para debug en {debug_path}")
+
+            # Pasar directamente el objeto PIL Image
+            result = self.client.run_workflow(
+                workspace_name=self.workspace,
+                workflow_id=self.workflow,
+                images={"image": img},
+                use_cache=True
             )
 
-            # Registrar respuesta antes de evaluar errores
-            logger.info(f"Código de estado: {response.status_code}")
-            logger.info(f"Respuesta: {response.text[:200]}...")  # Primeros 200 caracteres
+            first = result[0]
 
-            response.raise_for_status()
-            result = response.json()
+            # Debug: información del resultado
+            count = first.get("count_objects", 0)
+            predictions = first.get("predictions", [])
+            logger.info(f"RF-DETR: Resultado crudo - count: {count}, predictions: {len(predictions)}")
 
-            # Procesar la respuesta
+            # Convertir el formato de Roboflow al formato esperado por tu view
             detections = []
-            for prediction in result.get('predictions', []):
-                # Convertir de formato Roboflow a nuestro formato estandarizado
-                x = prediction.get('x', 0)
-                y = prediction.get('y', 0)
-                width = prediction.get('width', 0)
-                height = prediction.get('height', 0)
 
-                detection = {
-                    'class': prediction.get('class', 'unknown'),
-                    'confidence': prediction.get('confidence', 0.0),
-                    'bbox': {
-                        'x1': x - width / 2,
-                        'y1': y - height / 2,
-                        'x2': x + width / 2,
-                        'y2': y + height / 2,
+            if 'predictions' in predictions and len(predictions['predictions']) > 0:
+                for pred in predictions['predictions']:
+                    detection = {
+                        'class': pred.get('class', 'unknown'),
+                        'confidence': pred.get('confidence', 0.0),
+                        'bbox': [
+                            pred.get('x', 0) - pred.get('width', 0) / 2,  # x1
+                            pred.get('y', 0) - pred.get('height', 0) / 2,  # y1
+                            pred.get('x', 0) + pred.get('width', 0) / 2,  # x2
+                            pred.get('y', 0) + pred.get('height', 0) / 2   # y2
+                        ],
+                        'detection_id': pred.get('detection_id', ''),
+                        'class_id': pred.get('class_id', 0)
                     }
-                }
-                detections.append(detection)
+                    detections.append(detection)
 
+            logger.info(f"RF-DETR: Detecciones convertidas: {len(detections)}")
+
+            # Devolver en el formato esperado por tu view
             return {
-                'detections': detections,
-                'count': len(detections),
-                'model_type': 'roboflow',
-                'api_source': 'Roboflow API'
+                "detections": detections,  # ← Esto es lo que busca tu view
+                "count_objects": count,
+                "predictions": predictions,
+                "visualization": first.get("visualization"),
+                # Datos adicionales para compatibilidad
+                "model_info": {
+                    "type": "RF-DETR",
+                    "workspace": self.workspace,
+                    "workflow": self.workflow
+                }
             }
 
         except Exception as e:
-            logger.error(f"Error al procesar la imagen con Roboflow: {str(e)}", exc_info=True)
-            raise RuntimeError(f"Error al procesar la imagen con API externa: {str(e)}")
+            logger.error(f"RF-DETR: Error procesando imagen: {str(e)}")
+            # Devolver estructura vacía pero consistente
+            return {
+                "detections": [],
+                "count_objects": 0,
+                "predictions": [],
+                "visualization": None,
+                "error": str(e)
+            }
 
     def get_model_info(self) -> Dict[str, Any]:
         """
-        Devuelve información sobre el servicio de Roboflow
-
-        Returns:
-            Diccionario con información sobre el servicio
+        Devuelve información sobre el servicio RF-DETR de Roboflow,
+        con formato similar a YOLO y Claude para mantener consistencia.
         """
         return {
-            'type': 'Roboflow API',
-            'model_id': self.model_id,
-            'has_api_key': bool(self.api_key)
+            'type': 'RF-DETR',
+            'path': "Roboflow Cloud",
+            'device': 'cloud',
+            'classes': ['canned-individual'],  # Basado en tu ejemplo que funciona
+            'model': self.workflow,
+            'workspace': self.workspace,
         }

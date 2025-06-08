@@ -76,17 +76,17 @@ def prepare_image_for_model(img_file):
         width, height = img.size
         max_dimension = 1920  # Límite razonable que mantiene buena calidad
 
-        if width > max_dimension or height > max_dimension:
-            # Calcular nueva dimensión preservando proporción
-            if width > height:
-                new_width = max_dimension
-                new_height = int(height * max_dimension / width)
-            else:
-                new_height = max_dimension
-                new_width = int(width * max_dimension / height)
-
-            logger.info(f"Redimensionando imagen de {width}x{height} a {new_width}x{new_height}")
-            img = img.resize((new_width, new_height), Image.LANCZOS)
+        # if width > max_dimension or height > max_dimension:
+        #     # Calcular nueva dimensión preservando proporción
+        #     if width > height:
+        #         new_width = max_dimension
+        #         new_height = int(height * max_dimension / width)
+        #     else:
+        #         new_height = max_dimension
+        #         new_width = int(width * max_dimension / height)
+        #
+        #     logger.info(f"Redimensionando imagen de {width}x{height} a {new_width}x{new_height}")
+        #     img = img.resize((new_width, new_height), Image.LANCZOS)
 
         logger.info(f"Imagen preparada: {img.size[0]}x{img.size[1]}, modo: {img.mode}")
         return img
@@ -140,7 +140,7 @@ class DeteccionViewSet(viewsets.ReadOnlyModelViewSet):
             modelo_service = YOLOService()
         elif tipo_modelo == 'cl':
             modelo_service = ClaudeService()
-        elif tipo_modelo == 'roboflow':
+        elif tipo_modelo == 'rf_detr':
             modelo_service = RoboflowService()
         else:
             return Response(
