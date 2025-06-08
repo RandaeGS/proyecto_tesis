@@ -119,7 +119,7 @@ LOCAL_APPS = [
 
 # Configuraciones para los modelos
 MODEL_SETTINGS = {
-    'YOLO_MODEL_PATH': os.path.join(BASE_DIR, 'weights', 'modelo.pt'),
+    'YOLO_MODEL_PATH': os.path.join(BASE_DIR, 'weights', 'model.pt'),
 }
 
 # Configuraciones para la API de Claude (reemplaza con tus credenciales)
