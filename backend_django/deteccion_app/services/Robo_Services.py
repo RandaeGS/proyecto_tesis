@@ -1,7 +1,3 @@
-# services/Robo_Services.py
-import io
-import os
-import tempfile
 import time
 from typing import Dict, Any
 from PIL import Image
@@ -16,6 +12,7 @@ class RoboflowService(ModelService):
     """
     Servicio para RF-DETR usando la inference_sdk de Roboflow.
     """
+
     def __init__(self):
         self.client = InferenceHTTPClient(
             api_url="https://serverless.roboflow.com",
@@ -65,7 +62,7 @@ class RoboflowService(ModelService):
                             pred.get('x', 0) - pred.get('width', 0) / 2,  # x1
                             pred.get('y', 0) - pred.get('height', 0) / 2,  # y1
                             pred.get('x', 0) + pred.get('width', 0) / 2,  # x2
-                            pred.get('y', 0) + pred.get('height', 0) / 2   # y2
+                            pred.get('y', 0) + pred.get('height', 0) / 2  # y2
                         ],
                         'detection_id': pred.get('detection_id', ''),
                         'class_id': pred.get('class_id', 0)
