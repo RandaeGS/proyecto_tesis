@@ -70,27 +70,6 @@ class ImageService {
     }
   }
 
-  /// Obtiene todas las imágenes disponibles (para admins)
-  Future<List<ServerImage>> getAllImages() async {
-    try {
-      final data = await _apiClient.get(
-        ApiConstants.images,
-        entityName: 'Imágenes',
-      );
-
-      if (data is List) {
-        return data.map((json) => ServerImage.fromJson(json)).toList();
-      } else if (data is Map && data.containsKey('results') && data['results'] is List) {
-        return (data['results'] as List).map((json) => ServerImage.fromJson(json)).toList();
-      }
-
-      return [];
-    } catch (e) {
-      debugPrint('Error en getAllImages: $e');
-      rethrow;
-    }
-  }
-
   /// Obtiene las detecciones de una imagen específica
   Future<List<Map<String, dynamic>>> getImageDetections(String imageId) async {
     try {

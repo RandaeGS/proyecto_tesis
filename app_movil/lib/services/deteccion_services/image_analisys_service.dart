@@ -96,6 +96,8 @@ class ImageAnalysisService {
       // Convertir la respuesta a un objeto AnalysisResult
       final result = AnalysisResult.fromJson(data);
 
+      debugPrint('Análisis exitoso: ${result.outputImageBase64}');
+
       // Guardar el resultado en el almacenamiento local
       await _storageService.saveAnalysisResult(imageFile.path, result);
 

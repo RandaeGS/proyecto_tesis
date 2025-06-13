@@ -24,13 +24,12 @@ class RoboflowService(ModelService):
         self.workspace = "friasluna-ovd8y"
         self.workflow = "detect-count-and-visualize"
 
-        # Crear una ruta absoluta para el directorio debug_images
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        self.debug_dir = os.path.join(current_dir, 'debug_images')
-        os.makedirs(self.debug_dir, exist_ok=True)
-
-        # Imprimir la ruta para verificación
-        print(f"Directorio de debug creado en: {self.debug_dir}")
+        # current_dir = os.path.dirname(os.path.abspath(__file__))
+        # self.debug_dir = os.path.join(current_dir, 'debug_images')
+        # os.makedirs(self.debug_dir, exist_ok=True)
+        #
+        # # Imprimir la ruta para verificación
+        # print(f"Directorio de debug creado en: {self.debug_dir}")
 
     def load_model(self):
         # No hace nada; la SDK es serverless
@@ -42,10 +41,8 @@ class RoboflowService(ModelService):
         """
         try:
             if isinstance(img_data, str):
-                # Si ya es base64, devolverla tal como está
                 return img_data
             elif hasattr(img_data, 'numpy_image'):
-                # Si es un objeto de Roboflow con numpy_image
                 import numpy as np
 
                 pil_image = Image.fromarray(img_data.numpy_image)
@@ -54,7 +51,6 @@ class RoboflowService(ModelService):
                 img_str = base64.b64encode(buffer.getvalue()).decode()
                 return img_str
             elif isinstance(img_data, Image.Image):
-                # Si es una imagen PIL (Image ya está importado al inicio)
                 buffer = BytesIO()
                 img_data.save(buffer, format='PNG')
                 img_str = base64.b64encode(buffer.getvalue()).decode()
@@ -68,13 +64,12 @@ class RoboflowService(ModelService):
 
     def process_image(self, img: Image.Image) -> Dict[str, Any]:
         try:
-            # Debug: información de la imagen recibida
             logger.info(f"RF-DETR: Procesando imagen {img.size}, modo: {img.mode}")
 
-            # Guardar imagen para debug (temporal)
-            debug_path = f"/tmp/debug_roboflow_{int(time.time())}.png"
-            img.save(debug_path)
-            logger.info(f"RF-DETR: Imagen guardada para debug en {debug_path}")
+            # # Guardar imagen para debug (temporal)
+            # debug_path = f"/tmp/debug_roboflow_{int(time.time())}.png"
+            # img.save(debug_path)
+            # logger.info(f"RF-DETR: Imagen guardada para debug en {debug_path}")
 
             # Pasar directamente el objeto PIL Image
             result = self.client.run_workflow(
@@ -86,12 +81,10 @@ class RoboflowService(ModelService):
 
             first = result[0]
 
-            # Debug: información del resultado
             count = first.get("count_objects", 0)
             predictions = first.get("predictions", [])
             logger.info(f"RF-DETR: Resultado crudo - count: {count}, predictions: {len(predictions)}")
 
-            # Convertir el formato de Roboflow al formato esperado por tu view
             detections = []
 
             if 'predictions' in predictions and len(predictions['predictions']) > 0:
@@ -112,90 +105,93 @@ class RoboflowService(ModelService):
 
             logger.info(f"RF-DETR: Detecciones convertidas: {len(detections)}")
 
+            # debug_output_path = os.path.join(self.debug_dir, f"output_roboflow_{int(time.time())}.png")
+
+            # if first.get("output_image"):
+            #     print(f"Intentando guardar imagen en: {debug_output_path}")
+            #     print(f"Tipo de output_image: {type(first['output_image'])}")
+            #
+            #     try:
+            #         # Verificar si el directorio existe
+            #         print(f"¿Directorio existe? {os.path.exists(self.debug_dir)}")
+            #
+            #         if isinstance(first["output_image"], str):
+            #             print("Es un string (probablemente base64)")
+            #             # Decodificar base64 a bytes
+            #             try:
+            #                 # Eliminar el prefijo 'data:image/png;base64,' si existe
+            #                 base64_data = first["output_image"]
+            #                 if ',' in base64_data:
+            #                     base64_data = base64_data.split(',')[1]
+            #
+            #                 # Decodificar base64 a bytes
+            #                 image_bytes = base64.b64decode(base64_data)
+            #
+            #                 # Convertir bytes a imagen PIL
+            #                 image = Image.open(BytesIO(image_bytes))
+            #
+            #                 # Guardar imagen
+            #                 image.save(debug_output_path)
+            #                 print("Guardado exitosamente desde base64")
+            #             except Exception as e:
+            #                 print(f"Error procesando base64: {str(e)}")
+            #
+            #         elif hasattr(first["output_image"], 'numpy_image'):
+            #             print("Tiene atributo numpy_image")
+            #             output_img = Image.fromarray(first["output_image"].numpy_image)
+            #             output_img.save(debug_output_path)
+            #             print("Guardado como numpy")
+            #         elif isinstance(first["output_image"], Image.Image):
+            #             print("Es una imagen PIL")
+            #             first["output_image"].save(debug_output_path)
+            #             print("Guardado como PIL")
+            #
+            #         # Verificar si el archivo existe después de guardarlo
+            #         if os.path.exists(debug_output_path):
+            #             print(f"Verificado: el archivo existe en {debug_output_path}")
+            #             print(f"Tamaño del archivo: {os.path.getsize(debug_output_path)} bytes")
+            #
+            #             # Verificar que la imagen se puede abrir
+            #             try:
+            #                 with Image.open(debug_output_path) as img:
+            #                     print(f"Imagen guardada correctamente: {img.size}")
+            #             except Exception as e:
+            #                 print(f"Error verificando la imagen guardada: {str(e)}")
+            #         else:
+            #             print(f"Error: el archivo no existe en {debug_output_path}")
+            #
+            #     except Exception as e:
+            #         print(f"Error durante el guardado: {str(e)}")
+            #         # Imprimir los primeros 100 caracteres del string para debug
+            #         if isinstance(first["output_image"], str):
+            #             print(f"Primeros 100 caracteres del string: {first['output_image'][:100]}")
+            #
+            #     # Continuar con el proceso normal de conversión a base64
+            # output_image_base64 = None
             if first.get("output_image"):
-                debug_output_path = os.path.join(self.debug_dir, f"output_roboflow_{int(time.time())}.png")
-                print(f"Intentando guardar imagen en: {debug_output_path}")
-                print(f"Tipo de output_image: {type(first['output_image'])}")
+                # En lugar de guardar el archivo y devolver la ruta
+                if isinstance(first["output_image"], str):
+                    # Si es base64, dejarlo tal cual
+                    output_image = first["output_image"]
+                else:
+                    # Convertir a base64
+                    output_image = self._convert_image_to_base64(first["output_image"])
 
-                try:
-                    # Verificar si el directorio existe
-                    print(f"¿Directorio existe? {os.path.exists(self.debug_dir)}")
-
-                    if isinstance(first["output_image"], str):
-                        print("Es un string (probablemente base64)")
-                        # Decodificar base64 a bytes
-                        try:
-                            # Eliminar el prefijo 'data:image/png;base64,' si existe
-                            base64_data = first["output_image"]
-                            if ',' in base64_data:
-                                base64_data = base64_data.split(',')[1]
-
-                            # Decodificar base64 a bytes
-                            image_bytes = base64.b64decode(base64_data)
-
-                            # Convertir bytes a imagen PIL
-                            image = Image.open(BytesIO(image_bytes))
-
-                            # Guardar imagen
-                            image.save(debug_output_path)
-                            print("Guardado exitosamente desde base64")
-                        except Exception as e:
-                            print(f"Error procesando base64: {str(e)}")
-
-                    elif hasattr(first["output_image"], 'numpy_image'):
-                        print("Tiene atributo numpy_image")
-                        output_img = Image.fromarray(first["output_image"].numpy_image)
-                        output_img.save(debug_output_path)
-                        print("Guardado como numpy")
-                    elif isinstance(first["output_image"], Image.Image):
-                        print("Es una imagen PIL")
-                        first["output_image"].save(debug_output_path)
-                        print("Guardado como PIL")
-
-                    # Verificar si el archivo existe después de guardarlo
-                    if os.path.exists(debug_output_path):
-                        print(f"Verificado: el archivo existe en {debug_output_path}")
-                        print(f"Tamaño del archivo: {os.path.getsize(debug_output_path)} bytes")
-
-                        # Verificar que la imagen se puede abrir
-                        try:
-                            with Image.open(debug_output_path) as img:
-                                print(f"Imagen guardada correctamente: {img.size}")
-                        except Exception as e:
-                            print(f"Error verificando la imagen guardada: {str(e)}")
-                    else:
-                        print(f"Error: el archivo no existe en {debug_output_path}")
-
-                except Exception as e:
-                    print(f"Error durante el guardado: {str(e)}")
-                    # Imprimir los primeros 100 caracteres del string para debug
-                    if isinstance(first["output_image"], str):
-                        print(f"Primeros 100 caracteres del string: {first['output_image'][:100]}")
-
-                # Continuar con el proceso normal de conversión a base64
-            output_image_base64 = None
-            if first.get("output_image"):
-                output_image_base64 = self._convert_image_to_base64(first.get("output_image"))
-                logger.info(f"RF-DETR: Imagen de salida convertida a base64: {'Sí' if output_image_base64 else 'No'}")
-
-            # Devolver en el formato esperado por tu view
-            return {
-                "detections": detections,  # ← Esto es lo que busca tu view
-                "count_objects": count,
-                "predictions": predictions,
-                "output_image": output_image_base64,  # ← Imagen con bounding boxes en base64
-                "visualization": output_image_base64,  # ← Alias para compatibilidad
-                # Datos adicionales para compatibilidad
-                "model_info": {
-                    "type": "RF-DETR",
-                    "workspace": self.workspace,
-                    "workflow": self.workflow
+                return {
+                    "detections": detections,
+                    "count_objects": count,
+                    "predictions": predictions,
+                    "output_image": output_image,
+                    "visualization": output_image,
+                    "model_info": {
+                        "type": "RF-DETR",
+                        "workspace": self.workspace,
+                        "workflow": self.workflow
+                    }
                 }
-            }
 
         except Exception as e:
             logger.error(f"RF-DETR: Error procesando imagen: {str(e)}")
-            # Devolver estructura vacía pero consistente
             return {
                 "detections": [],
                 "count_objects": 0,
@@ -214,7 +210,7 @@ class RoboflowService(ModelService):
             'type': 'RF-DETR',
             'path': "Roboflow Cloud",
             'device': 'cloud',
-            'classes': ['canned-individual'],  # Basado en tu ejemplo que funciona
+            'classes': ['canned-individual'],
             'model': self.workflow,
             'workspace': self.workspace,
         }
