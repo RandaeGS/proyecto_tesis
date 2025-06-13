@@ -1,0 +1,4 @@
+bottle-individual
+bottle-pack-12
+canned-individual
+canned-pack

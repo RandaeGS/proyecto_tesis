@@ -337,11 +337,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
       return;
     }
 
-    Navigator.push(
+    Navigator.pushNamed(
       context,
-      MaterialPageRoute(
-        builder: (context) => const LiveCameraDetectionScreen(),
-      ),
+        '/yolo-launcher'
     ).then((_) {
       // Recargar imágenes al volver
       _initialize();
