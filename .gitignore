@@ -13,4 +13,9 @@ modelo/jupyer_notebook/canned_food_1564.jpg
 modelo/jupyer_notebook/canned_food_1623.jpg
 modelo/jupyer_notebook/cereals_cookies_111.jpg
 modelo/jupyer_notebook/cereals_cookies_114.jpg
-
+modelo/jupyer_notebook/yolov5/
+modelo/jupyer_notebook/yolov8_food_detector/
+modelo/jupyer_notebook/yolov12/
+.idea/
+backend_django/.idea/
+app_movil/android/app/.cxx/Debug/
