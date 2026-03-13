@@ -16,9 +16,7 @@ import '../services/deteccion_services/confirmation_dialog.dart';
 import '../services/images/images_provider.dart';
 import '../services/images/images_service.dart';
 import '../utils/reconciliation_dialog.dart';
-import '../utils/show_analisys_results.dart';
 import 'images/server_screen_managment.dart';
-import 'live_camera/live_camera_screen.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({Key? key}) : super(key: key);
@@ -30,7 +28,8 @@ class ImageCaptureScreen extends StatefulWidget {
 /// Diálogo para mostrar el progreso de análisis de la imagen
 class AnalysisProgressDialog {
   /// Muestra un diálogo de progreso mientras se analiza la imagen
-  static void show(BuildContext context, {String message = 'Analizando imagen...'}) {
+  static void show(BuildContext context,
+      {String message = 'Analizando imagen...'}) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -50,10 +49,8 @@ class AnalysisProgressDialog {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500
-                ),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 12),
               Text(
@@ -119,12 +116,6 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     }
   }
 
-  // Método modificado para usar AnalysisResultsDialog
-  void _showAnalysisResults(AnalysisResult result) {
-    // Usamos el método estático de nuestra clase AnalysisResultsDialog
-    AnalysisResultsDialog.show(context, result);
-  }
-
   // Captura una nueva imagen
   Future<void> _captureImage(ImageSource source) async {
     if (_centerId == null) {
@@ -147,15 +138,15 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         // Mostrar diálogo de progreso
         AnalysisProgressDialog.show(context);
 
-        // Obtener el modelo de detección seleccionado
-        final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
-        final modelType = analysisProvider.selectedModel;
+        final analysisProvider =
+            Provider.of<AnalysisProvider>(context, listen: false);
 
         // Subir y analizar la imagen SIN GUARDAR automáticamente
         final file = File(photo.path);
 
         // Debug info
-        debugPrint('Iniciando análisis de imagen: ${file.path}, tamaño: ${await file.length() ~/ 1024} KB');
+        debugPrint(
+            'Iniciando análisis de imagen: ${file.path}, tamaño: ${await file.length() ~/ 1024} KB');
 
         final result = await analysisProvider.analyzeImage(
           file,
@@ -171,7 +162,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         // Verificar si tenemos un resultado para confirmar
         if (mounted && result != null) {
           // Debug info
-          debugPrint('Análisis completado: ${result.numeroObjetos} objetos detectados');
+          debugPrint(
+              'Análisis completado: ${result.numeroObjetos} objetos detectados');
 
           // Mostrar diálogo de confirmación con edición de cantidades
           // MODIFICADO: Ahora esperamos un Map<String, dynamic> que contiene las modificaciones
@@ -180,26 +172,31 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           if (editResult != null) {
             // Usuario confirmó con posibles modificaciones, mostrar progreso de guardado
             if (mounted) {
-              AnalysisProgressDialog.show(context, message: 'Guardando resultados...');
+              AnalysisProgressDialog.show(context,
+                  message: 'Guardando resultados...');
             }
 
             // Actualizar el análisisProvider con los resultados modificados
-            final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
+            final analysisProvider =
+                Provider.of<AnalysisProvider>(context, listen: false);
 
             // NUEVO: Proporcionar los resultados modificados al provider
             if (editResult.containsKey('modified_results')) {
-              analysisProvider.setModifiedResults(editResult['modified_results']);
+              analysisProvider
+                  .setModifiedResults(editResult['modified_results']);
             }
 
             // Confirmar y guardar en el servidor
             await analysisProvider.confirmAnalysis(centerId: _centerId);
 
             // Recargar imágenes del centro
-            final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
+            final imageProvider =
+                Provider.of<ServerImageProvider>(context, listen: false);
             await imageProvider.loadCenterImages(_centerId!);
 
             // NUEVO: Actualizar el product data provider con los resultados confirmados
-            final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
+            final productDataProvider =
+                Provider.of<ProductDataProvider>(context, listen: false);
             await productDataProvider.loadProductData(_centerId!);
 
             // NUEVO: Verificar si hay conflictos con el inventario manual
@@ -255,9 +252,12 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     if (_centerId == null) return;
 
     try {
-      final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
-      final productDataProvider = Provider.of<ProductDataProvider>(context, listen: false);
-      final inventoryProvider = Provider.of<InventoryComparisonProvider>(context, listen: false);
+      final imageProvider =
+          Provider.of<ServerImageProvider>(context, listen: false);
+      final productDataProvider =
+          Provider.of<ProductDataProvider>(context, listen: false);
+      final inventoryProvider =
+          Provider.of<InventoryComparisonProvider>(context, listen: false);
 
       // Crear el servicio de reconciliación
       final reconciliationService = InventoryReconciliationService(
@@ -282,7 +282,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           context,
           conflicts,
           _centerId!,
-              (decisions) async {
+          (decisions) async {
             // Aplicar las decisiones de reconciliación
             final success = await reconciliationService.reconcileInventory(
               context,
@@ -337,21 +337,18 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
       return;
     }
 
-    Navigator.pushNamed(
-      context,
-        '/yolo-launcher'
-    ).then((_) {
-      // Recargar imágenes al volver
+    Navigator.pushNamed(context, '/yolo-launcher').then((saved) {
       _initialize();
-
-      // También verificar si hay conflictos con el inventario después de la detección en vivo
-      _checkInventoryReconciliation();
+      if (saved == true) {
+        _checkInventoryReconciliation();
+      }
     });
   }
 
   // Muestra opciones para capturar imagen (MODIFICADO)
   void _showImageOptions() {
-    final analysisProvider = Provider.of<AnalysisProvider>(context, listen: false);
+    final analysisProvider =
+        Provider.of<AnalysisProvider>(context, listen: false);
 
     showModalBottomSheet(
       context: context,
@@ -453,15 +450,18 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   // Ver detalles de una imagen
   void _viewImage(ServerImage image, AnalysisResult? analysisResult) {
     // Intentar obtener el mejor análisis disponible usando el nuevo método
-    final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
+    final imageProvider =
+        Provider.of<ServerImageProvider>(context, listen: false);
     final bestAnalysis = imageProvider.getBestAnalysisForImage(image.id);
 
     // Si encontramos un mejor análisis, usarlo en lugar del proporcionado
     if (bestAnalysis != null) {
-      debugPrint('Usando análisis optimizado con tiempo: ${bestAnalysis.tiempoProcesamiento}');
+      debugPrint(
+          'Usando análisis optimizado con tiempo: ${bestAnalysis.tiempoProcesamiento}');
       analysisResult = bestAnalysis;
     } else if (analysisResult != null) {
-      debugPrint('Usando análisis proporcionado con tiempo: ${analysisResult.tiempoProcesamiento}');
+      debugPrint(
+          'Usando análisis proporcionado con tiempo: ${analysisResult.tiempoProcesamiento}');
     } else {
       debugPrint('No se encontró ningún análisis para la imagen');
     }
@@ -481,8 +481,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   // Eliminar una imagen
   Future<void> _deleteImage(ServerImage image) async {
     try {
-      final success = await Provider.of<ServerImageProvider>(context, listen: false)
-          .deleteImage(image.id);
+      final success =
+          await Provider.of<ServerImageProvider>(context, listen: false)
+              .deleteImage(image.id);
 
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -531,26 +532,27 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage.isNotEmpty
-          ? _buildErrorState()
-          : Consumer<ServerImageProvider>(
-        builder: (context, imageProvider, _) {
-          if (imageProvider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+              ? _buildErrorState()
+              : Consumer<ServerImageProvider>(
+                  builder: (context, imageProvider, _) {
+                    if (imageProvider.isLoading) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-          if (imageProvider.centerImages.isEmpty) {
-            return _buildEmptyState();
-          }
+                    if (imageProvider.centerImages.isEmpty) {
+                      return _buildEmptyState();
+                    }
 
-          return _buildImageGrid(imageProvider);
-        },
-      ),
+                    return _buildImageGrid(imageProvider);
+                  },
+                ),
     );
   }
 
   Widget _buildErrorState() {
     // Obtener el imageProvider desde el contexto
-    final imageProvider = Provider.of<ServerImageProvider>(context, listen: false);
+    final imageProvider =
+        Provider.of<ServerImageProvider>(context, listen: false);
 
     return Center(
       child: Column(
@@ -599,7 +601,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
               if (imageProvider.confirmedCenterDetections.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('No hay detecciones confirmadas para sincronizar'),
+                    content:
+                        Text('No hay detecciones confirmadas para sincronizar'),
                     backgroundColor: Colors.orange,
                   ),
                 );
@@ -613,8 +616,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                   title: const Text('Sincronizar con Inventario'),
                   content: const Text(
                       'Esto actualizará el inventario con los productos detectados en las imágenes. '
-                          '¿Deseas continuar?'
-                  ),
+                      '¿Deseas continuar?'),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(false),
@@ -640,7 +642,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
 
               try {
                 // Obtener el ID del centro
-                final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                final authProvider =
+                    Provider.of<AuthProvider>(context, listen: false);
                 final centerId = authProvider.centerId;
 
                 if (centerId == null) {
@@ -648,10 +651,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                 }
 
                 // Inicializar el servicio de sincronización
-                final inventoryProvider = Provider.of<InventoryComparisonProvider>(
-                    context,
-                    listen: false
-                );
+                final inventoryProvider =
+                    Provider.of<InventoryComparisonProvider>(context,
+                        listen: false);
 
                 final syncService = InventorySyncService(
                   imageProvider: imageProvider,
@@ -659,7 +661,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                 );
 
                 // Realizar la sincronización
-                final success = await syncService.syncInventoryWithImages(centerId);
+                final success =
+                    await syncService.syncInventoryWithImages(centerId);
 
                 if (success) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -738,8 +741,10 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         itemCount: imageProvider.centerImages.length,
         itemBuilder: (context, index) {
           final image = imageProvider.centerImages[index];
-          final hasAnalysis = imageProvider.analysisResults.containsKey(image.id);
-          final analysisResult = imageProvider.getBestAnalysisForImage(image.id);
+          final hasAnalysis =
+              imageProvider.analysisResults.containsKey(image.id);
+          final analysisResult =
+              imageProvider.getBestAnalysisForImage(image.id);
 
           return Card(
             elevation: 3,
@@ -757,7 +762,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                       fit: StackFit.expand,
                       children: [
                         ClipRRect(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(12)),
                           child: CachedNetworkImage(
                             imageUrl: imageService.getImageUrl(image.file),
                             fit: BoxFit.cover,
@@ -825,7 +831,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                          icon: const Icon(Icons.delete,
+                              color: Colors.red, size: 20),
                           onPressed: () => _showDeleteConfirmation(image),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),

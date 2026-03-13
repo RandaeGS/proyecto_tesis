@@ -34,20 +34,20 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
 
     private fun initPaints() {
         boxPaint.color = ContextCompat.getColor(context!!, R.color.bounding_box_color)
-        boxPaint.strokeWidth = 10F
+        boxPaint.strokeWidth = 4F
         boxPaint.style = Paint.Style.STROKE
         boxPaint.isAntiAlias = true
 
-        fillPaint.color = Color.argb(30, 255, 255, 0)
+        fillPaint.color = Color.argb(20, 255, 20, 147)
         fillPaint.style = Paint.Style.FILL
 
-        textBackgroundPaint.color = Color.argb(200, 0, 0, 0)
+        textBackgroundPaint.color = Color.argb(180, 255, 20, 147)
         textBackgroundPaint.style = Paint.Style.FILL
-        textBackgroundPaint.textSize = 60f
+        textBackgroundPaint.textSize = 28f
 
         textPaint.color = Color.WHITE
         textPaint.style = Paint.Style.FILL
-        textPaint.textSize = 60f
+        textPaint.textSize = 28f
         textPaint.isAntiAlias = true
         textPaint.typeface = android.graphics.Typeface.DEFAULT_BOLD
     }
@@ -72,7 +72,7 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
 
             val textWidth = bounds.width()
             val textHeight = bounds.height()
-            val textPadding = 20f
+            val textPadding = 6f
 
             val textBackgroundRect = RectF(
                 left,

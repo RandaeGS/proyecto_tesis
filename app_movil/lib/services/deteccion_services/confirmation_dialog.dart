@@ -87,17 +87,17 @@ class ConfirmationDialog {
 
   /// Muestra un diálogo para confirmar o rechazar los resultados del análisis
   /// Ahora permite editar la cantidad de productos y guarda correctamente las modificaciones
-  static Future<Map<String, dynamic>?> show(BuildContext context,
-      AnalysisResult result) {
+  static Future<Map<String, dynamic>?> show(
+      BuildContext context, AnalysisResult result) {
     // Procesar y agrupar las detecciones por tipo de producto
     final Map<String, List<Map<String, dynamic>>> groupedDetections = {};
     final Map<String, int> productCounts = {};
-    final Map<String, int> editedCounts = {
-    }; // Para guardar las cantidades editadas
+    final Map<String, int> editedCounts =
+        {}; // Para guardar las cantidades editadas
 
     // Rastrear detecciones originales para mantener sus propiedades
-    final List<Map<String, dynamic>> originalDetections = List.from(
-        result.detecciones);
+    final List<Map<String, dynamic>> originalDetections =
+        List.from(result.detecciones);
 
     for (var detection in originalDetections) {
       final className = detection['class'] ?? 'unknown';
@@ -122,8 +122,7 @@ class ConfirmationDialog {
     try {
       final dateTime = DateTime.parse(result.fechaCreacion);
       formattedDate =
-      '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime
-          .hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+          '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       developer.log('Error al parsear fecha: $e', name: 'ConfirmationDialog');
     }
@@ -136,9 +135,7 @@ class ConfirmationDialog {
       barrierDismissible: false,
       builder: (BuildContext context) {
         // Obtener el tamaño de la pantalla para hacer el diálogo responsive
-        final screenSize = MediaQuery
-            .of(context)
-            .size;
+        final screenSize = MediaQuery.of(context).size;
         final isSmallScreen = screenSize.width < 360;
 
         // Estado para manejar los conteos editados
@@ -201,8 +198,8 @@ class ConfirmationDialog {
                   final originals = groupedDetections[category] ?? [];
 
                   // Obtener el nombre de clase original para esta categoría
-                  final originalClassName = _getOriginalClassName(
-                      category, groupedDetections);
+                  final originalClassName =
+                      _getOriginalClassName(category, groupedDetections);
 
                   // Si hay detecciones originales, usamos sus propiedades
                   if (originals.isNotEmpty) {
@@ -217,17 +214,26 @@ class ConfirmationDialog {
                         detection = Map<String, dynamic>.from(originals[0]);
                         // Generar un bbox diferente para no tener objetos exactamente superpuestos
                         if (detection.containsKey('bbox')) {
-                          var bbox = Map<String, dynamic>.from(
-                              detection['bbox']);
-                          // Ligero desplazamiento para no superponer completamente
-                          bbox['x1'] = (bbox['x1'] as double) + (i -
-                              originals.length + 1) * 5;
-                          bbox['y1'] = (bbox['y1'] as double) + (i -
-                              originals.length + 1) * 5;
-                          bbox['x2'] = (bbox['x2'] as double) + (i -
-                              originals.length + 1) * 5;
-                          bbox['y2'] = (bbox['y2'] as double) + (i -
-                              originals.length + 1) * 5;
+                          final rawBbox = detection['bbox'];
+                          Map<String, dynamic> bbox;
+                          if (rawBbox is List) {
+                            bbox = {
+                              'x1': (rawBbox[0] as num).toDouble(),
+                              'y1': (rawBbox[1] as num).toDouble(),
+                              'x2': (rawBbox[2] as num).toDouble(),
+                              'y2': (rawBbox[3] as num).toDouble(),
+                            };
+                          } else {
+                            bbox = Map<String, dynamic>.from(rawBbox as Map);
+                          }
+                          bbox['x1'] = (bbox['x1'] as double) +
+                              (i - originals.length + 1) * 5;
+                          bbox['y1'] = (bbox['y1'] as double) +
+                              (i - originals.length + 1) * 5;
+                          bbox['x2'] = (bbox['x2'] as double) +
+                              (i - originals.length + 1) * 5;
+                          bbox['y2'] = (bbox['y2'] as double) +
+                              (i - originals.length + 1) * 5;
                           detection['bbox'] = bbox;
                         }
                       }
@@ -306,14 +312,8 @@ class ConfirmationDialog {
               elevation: 5,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery
-                      .of(context)
-                      .size
-                      .height * 0.8,
-                  maxWidth: MediaQuery
-                      .of(context)
-                      .size
-                      .width * 0.95,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  maxWidth: MediaQuery.of(context).size.width * 0.95,
                 ),
                 child: SingleChildScrollView(
                   child: Column(
@@ -334,8 +334,8 @@ class ConfirmationDialog {
                           children: [
                             const CircleAvatar(
                               backgroundColor: Colors.white,
-                              child: Icon(
-                                  Icons.inventory_2, color: Colors.blue),
+                              child:
+                                  Icon(Icons.inventory_2, color: Colors.blue),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -418,8 +418,8 @@ class ConfirmationDialog {
                                 _buildInfoCard(
                                   icon: Icons.timer,
                                   title: 'Tiempo',
-                                  value: '${result.tiempoProcesamiento
-                                      .toStringAsFixed(1)}s',
+                                  value:
+                                      '${result.tiempoProcesamiento.toStringAsFixed(1)}s',
                                   color: Colors.orange,
                                   isSmallScreen: isSmallScreen,
                                 ),
@@ -496,8 +496,8 @@ class ConfirmationDialog {
                             // Mostrar productos agrupados por categoría con controles de edición
                             ...categories.map((category) {
                               final items = groupedDetections[category] ?? [];
-                              final originalCount = productCounts[category] ??
-                                  0;
+                              final originalCount =
+                                  productCounts[category] ?? 0;
                               final count = editedCounts[category] ?? 0;
                               final color = getColorForProduct(category);
                               final icon = getIconForProduct(category);
@@ -513,38 +513,38 @@ class ConfirmationDialog {
                                   padding: EdgeInsets.all(
                                       isSmallScreen ? 8.0 : 12.0),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment
-                                        .start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       // Layout adaptativo para productos
                                       if (isSmallScreen)
-                                      // Layout para pantallas pequeñas - apilado verticalmente
+                                        // Layout para pantallas pequeñas - apilado verticalmente
                                         Column(
-                                          crossAxisAlignment: CrossAxisAlignment
-                                              .start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             // Información del producto
                                             Row(
                                               children: [
                                                 CircleAvatar(
                                                   radius: 16,
-                                                  backgroundColor: color
-                                                      .withOpacity(0.2),
-                                                  child: Icon(
-                                                      icon, color: color,
-                                                      size: 16),
+                                                  backgroundColor:
+                                                      color.withOpacity(0.2),
+                                                  child: Icon(icon,
+                                                      color: color, size: 16),
                                                 ),
                                                 const SizedBox(width: 8),
                                                 Expanded(
                                                   child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment
-                                                        .start,
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
                                                     children: [
                                                       Text(
                                                         category,
                                                         style: const TextStyle(
-                                                          fontWeight: FontWeight
-                                                              .bold,
+                                                          fontWeight:
+                                                              FontWeight.bold,
                                                           fontSize: 14,
                                                         ),
                                                         overflow: TextOverflow
@@ -555,8 +555,8 @@ class ConfirmationDialog {
                                                           'Original: $originalCount',
                                                           style: TextStyle(
                                                             fontSize: 11,
-                                                            color: Colors.grey
-                                                                .shade600,
+                                                            color: Colors
+                                                                .grey.shade600,
                                                             fontStyle: FontStyle
                                                                 .italic,
                                                           ),
@@ -581,26 +581,26 @@ class ConfirmationDialog {
                                           ],
                                         )
                                       else
-                                      // Layout para pantallas normales - horizontal
+                                        // Layout para pantallas normales - horizontal
                                         Row(
                                           children: [
                                             CircleAvatar(
-                                              backgroundColor: color
-                                                  .withOpacity(0.2),
-                                              child: Icon(
-                                                  icon, color: color, size: 20),
+                                              backgroundColor:
+                                                  color.withOpacity(0.2),
+                                              child: Icon(icon,
+                                                  color: color, size: 20),
                                             ),
                                             const SizedBox(width: 12),
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment
-                                                    .start,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
                                                     category,
                                                     style: const TextStyle(
-                                                      fontWeight: FontWeight
-                                                          .bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                       fontSize: 16,
                                                     ),
                                                   ),
@@ -609,10 +609,10 @@ class ConfirmationDialog {
                                                       'Original: $originalCount',
                                                       style: TextStyle(
                                                         fontSize: 12,
-                                                        color: Colors.grey
-                                                            .shade600,
-                                                        fontStyle: FontStyle
-                                                            .italic,
+                                                        color: Colors
+                                                            .grey.shade600,
+                                                        fontStyle:
+                                                            FontStyle.italic,
                                                       ),
                                                     ),
                                                 ],
@@ -657,14 +657,13 @@ class ConfirmationDialog {
                                                 const SizedBox(width: 4),
                                                 Expanded(
                                                   child: Text(
-                                                    'Confianza: ${_calculateAverageConfidence(
-                                                        items)}%',
+                                                    'Confianza: ${_calculateAverageConfidence(items)}%',
                                                     style: TextStyle(
                                                         fontSize: isSmallScreen
                                                             ? 12
                                                             : 14),
-                                                    overflow: TextOverflow
-                                                        .ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                               ],
@@ -679,7 +678,8 @@ class ConfirmationDialog {
 
                             // Pie del diálogo con acciones
                             Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16,
+                              padding: EdgeInsets.symmetric(
+                                  vertical: 16,
                                   horizontal: isSmallScreen ? 8 : 16),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
@@ -688,8 +688,9 @@ class ConfirmationDialog {
                                   OutlinedButton.icon(
                                     icon: Icon(Icons.close,
                                         size: isSmallScreen ? 16 : 20),
-                                    label: Text('Cancelar', style: TextStyle(
-                                        fontSize: isSmallScreen ? 12 : 14)),
+                                    label: Text('Cancelar',
+                                        style: TextStyle(
+                                            fontSize: isSmallScreen ? 12 : 14)),
                                     onPressed: cancelDialog,
                                     // Usar la función correcta
                                     style: OutlinedButton.styleFrom(
@@ -704,8 +705,9 @@ class ConfirmationDialog {
                                   ElevatedButton.icon(
                                     icon: Icon(Icons.check,
                                         size: isSmallScreen ? 16 : 20),
-                                    label: Text('Guardar', style: TextStyle(
-                                        fontSize: isSmallScreen ? 12 : 14)),
+                                    label: Text('Guardar',
+                                        style: TextStyle(
+                                            fontSize: isSmallScreen ? 12 : 14)),
                                     onPressed: confirmWithEdits,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.green,
@@ -734,7 +736,8 @@ class ConfirmationDialog {
   }
 
   // Widget para los controles de conteo COMPACTOS
-  static Widget _buildCompactCountControls(String category,
+  static Widget _buildCompactCountControls(
+      String category,
       int count,
       bool hasBeenModified,
       Function(String) decrementCount,
@@ -748,9 +751,7 @@ class ConfirmationDialog {
           height: isSmallScreen ? 22 : 26,
           width: isSmallScreen ? 22 : 26,
           decoration: BoxDecoration(
-            color: count > 0
-                ? Colors.red.shade100
-                : Colors.grey.shade200,
+            color: count > 0 ? Colors.red.shade100 : Colors.grey.shade200,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Material(
@@ -775,14 +776,11 @@ class ConfirmationDialog {
           width: isSmallScreen ? 26 : 32,
           margin: EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            color: hasBeenModified
-                ? Colors.yellow.shade100
-                : Colors.grey.shade100,
+            color:
+                hasBeenModified ? Colors.yellow.shade100 : Colors.grey.shade100,
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
-              color: hasBeenModified
-                  ? Colors.orange
-                  : Colors.grey.shade300,
+              color: hasBeenModified ? Colors.orange : Colors.grey.shade300,
               width: 1,
             ),
           ),
@@ -792,9 +790,7 @@ class ConfirmationDialog {
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: isSmallScreen ? 12 : 14,
-                color: hasBeenModified
-                    ? Colors.orange.shade800
-                    : Colors.black,
+                color: hasBeenModified ? Colors.orange.shade800 : Colors.black,
               ),
             ),
           ),
@@ -892,9 +888,7 @@ class ConfirmationDialog {
   }
 
   // Detalles técnicos con icono
-  static Widget _buildTechnicalDetail(String label,
-      String value,
-      IconData icon,
+  static Widget _buildTechnicalDetail(String label, String value, IconData icon,
       {bool isSmallScreen = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),

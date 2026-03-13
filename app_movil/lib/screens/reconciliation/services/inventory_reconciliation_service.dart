@@ -21,9 +21,9 @@ class ReconciliationConflict {
 
 /// Tipos de acción de reconciliación
 enum ReconciliationAction {
-  add,       // Añadir a existencias
-  replace,   // Reemplazar cantidad actual
-  ignore     // Ignorar la detección
+  add, // Añadir a existencias
+  replace, // Reemplazar cantidad actual
+  ignore // Ignorar la detección
 }
 
 /// Estructura para representar una decisión de reconciliación
@@ -54,10 +54,12 @@ class InventoryReconciliationService {
     final List<ReconciliationConflict> conflicts = [];
 
     // Obtener los productos detectados en imágenes (solo los confirmados)
-    final Map<String, int> detectedCounts = imageProvider.getProductCounts(onlyConfirmed: true);
+    final Map<String, int> detectedCounts =
+        imageProvider.getProductCounts(onlyConfirmed: true);
 
     // Obtener el inventario manual actual
-    final Map<String, int> inventoryCounts = Map.from(productDataProvider.currentProductCounts);
+    final Map<String, int> inventoryCounts =
+        Map.from(productDataProvider.currentProductCounts);
 
     // Comprobar conflictos
     detectedCounts.forEach((category, detectedCount) {
@@ -110,13 +112,14 @@ class InventoryReconciliationService {
 
   /// Realiza la reconciliación según la decisión del usuario
   Future<bool> reconcileInventory(
-      BuildContext context,
-      int centerId,
-      List<ReconciliationDecision> decisions,
-      ) async {
+    BuildContext context,
+    int centerId,
+    List<ReconciliationDecision> decisions,
+  ) async {
     try {
       // Obtener el inventario actual
-      final Map<String, int> updatedCounts = Map.from(productDataProvider.currentProductCounts);
+      final Map<String, int> updatedCounts =
+          Map.from(productDataProvider.currentProductCounts);
       bool hasChanges = false;
 
       // Aplicar las decisiones de reconciliación
@@ -124,17 +127,19 @@ class InventoryReconciliationService {
         switch (decision.action) {
           case ReconciliationAction.add:
             updatedCounts[decision.conflict.category] =
-                (updatedCounts[decision.conflict.category] ?? 0) + decision.conflict.detectedCount;
+                (updatedCounts[decision.conflict.category] ?? 0) +
+                    decision.conflict.detectedCount;
             hasChanges = true;
             break;
 
           case ReconciliationAction.replace:
-            updatedCounts[decision.conflict.category] = decision.conflict.detectedCount;
+            updatedCounts[decision.conflict.category] =
+                decision.conflict.detectedCount;
             hasChanges = true;
             break;
 
           case ReconciliationAction.ignore:
-          // No hacer nada
+            // No hacer nada
             break;
         }
       }
@@ -144,8 +149,9 @@ class InventoryReconciliationService {
         productDataProvider.updateProductCounts(updatedCounts);
 
         // Guardar una instantánea del inventario actualizado
-        final snapshotName = 'Reconciliacion - ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
-        final snapshotDesc = 'Actualizacion por reconciliación con imágenes';
+        final snapshotName =
+            'Reconciliacion - ${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}';
+        final snapshotDesc = 'Actualizacion por reconciliacion con imagenes';
 
         await inventoryProvider.saveInventorySnapshot(
           centerId,
@@ -167,9 +173,9 @@ class InventoryReconciliationService {
 
   /// Registra una decisión de reconciliación en el historial (para futuras auditorías)
   Future<void> logReconciliationDecision(
-      int centerId,
-      ReconciliationDecision decision,
-      ) async {
+    int centerId,
+    ReconciliationDecision decision,
+  ) async {
     try {
       // Registrar en el log de depuración
       debugPrint('Reconciliación para ${decision.conflict.category}: '

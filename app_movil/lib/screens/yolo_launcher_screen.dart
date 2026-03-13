@@ -98,6 +98,7 @@ class _YoloLauncherScreenState extends State<YoloLauncherScreen> {
               backgroundColor: Colors.green,
             ),
           );
+          Navigator.of(context).pop(true);
         }
       } else {
         analysisProvider.cancelPendingAnalysis();
