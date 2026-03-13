@@ -1,6 +1,8 @@
 package com.example.app_movil
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
@@ -8,6 +10,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.Surface
 import androidx.appcompat.app.AppCompatActivity
+import java.io.File
+import java.io.FileOutputStream
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -37,7 +41,8 @@ class YoloDetectionActivity : AppCompatActivity(), Detector.DetectorListener {
     private lateinit var detector: Detector
 
     private lateinit var cameraExecutor: ExecutorService
-    private val isActivityDestroying = AtomicBoolean(false) // Flag para indicar si la actividad se está destruyendo
+    private val isActivityDestroying = AtomicBoolean(false)
+    @Volatile private var latestBitmap: Bitmap? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,7 +55,27 @@ class YoloDetectionActivity : AppCompatActivity(), Detector.DetectorListener {
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        // Los permisos se solicitan en onResume si es necesario
+        binding.captureButton.setOnClickListener { captureFrame() }
+    }
+
+    private fun captureFrame() {
+        val bitmap = latestBitmap ?: run {
+            Log.w(TAG, "captureFrame: no frame available yet")
+            return
+        }
+        try {
+            val file = File(cacheDir, "captured_frame_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out)
+            }
+            val resultIntent = Intent().apply {
+                putExtra("image_path", file.absolutePath)
+            }
+            setResult(Activity.RESULT_OK, resultIntent)
+            finish()
+        } catch (e: Exception) {
+            Log.e(TAG, "captureFrame: failed to save bitmap", e)
+        }
     }
 
     private fun startCamera() {
@@ -122,9 +147,10 @@ class YoloDetectionActivity : AppCompatActivity(), Detector.DetectorListener {
                 bitmapBuffer, 0, 0, bitmapBuffer.width, bitmapBuffer.height, matrix, true
             )
 
-            if (isActivityDestroying.get()) { // Doble chequeo por si el flag cambió durante el preprocesamiento
+            if (isActivityDestroying.get()) {
                 return@setAnalyzer
             }
+            latestBitmap = rotatedBitmap
             detector.detect(rotatedBitmap)
         }
 

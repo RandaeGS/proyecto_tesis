@@ -39,7 +39,7 @@
 
         <activity
                 android:name=".YoloDetectionActivity"
-                android:theme="@style/Theme.AppCompat.Light.DarkActionBar"
+                android:theme="@style/Theme.MaterialComponents.Light.DarkActionBar"
                 android:configChanges="orientation|keyboardHidden|screenSize"
                 android:exported="false" />
 

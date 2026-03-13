@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.app_movil"
-        minSdk = 21  // Mínimo requerido para CameraX
+        minSdkVersion = flutter.minSdkVersion  // Mínimo requerido para CameraX
         targetSdk = 35  // Actualizado a 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName

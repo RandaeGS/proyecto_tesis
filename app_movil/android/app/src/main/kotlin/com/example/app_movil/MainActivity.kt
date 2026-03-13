@@ -9,14 +9,15 @@ import android.app.Activity
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "yolo_detector"
     private val YOLO_ACTIVITY_REQUEST = 1001
+    private var methodChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        methodChannel!!.setMethodCallHandler { call, result ->
             when (call.method) {
                 "startYoloDetection" -> {
-                    // Lanzar la actividad de detección YOLO nativa
                     val intent = Intent(this, YoloDetectionActivity::class.java)
                     startActivityForResult(intent, YOLO_ACTIVITY_REQUEST)
                     result.success("Launching YOLO detection")
@@ -31,10 +32,10 @@ class MainActivity: FlutterActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode == YOLO_ACTIVITY_REQUEST) {
-            if (resultCode == Activity.RESULT_OK) {
-                // Aquí puedes manejar los resultados si es necesario
-                // Por ejemplo, si quieres pasar datos de vuelta a Flutter
+        if (requestCode == YOLO_ACTIVITY_REQUEST && resultCode == Activity.RESULT_OK) {
+            val imagePath = data?.getStringExtra("image_path")
+            if (imagePath != null) {
+                methodChannel?.invokeMethod("onImageCaptured", imagePath)
             }
         }
     }
